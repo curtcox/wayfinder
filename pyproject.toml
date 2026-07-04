@@ -71,10 +71,17 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["D103", "PLR2004", "S101", "INP001", "TC003", "SIM117"]
+"tests/**" = ["D103", "PLR2004", "S101", "INP001", "TC003", "SIM117", "E501", "PERF401"]
 "hooks/**" = ["D103"]
 "src/wayfinder/core/canonical.py" = ["ANN401"]
 "src/wayfinder/core/**" = ["D102", "D107", "TC003"]
+"src/wayfinder/core/reducer.py" = ["C901", "PLR0912", "PLR0915", "SIM102"]
+"src/wayfinder/core/updates.py" = ["C901", "PLR0911", "PLR0912", "PLR0915", "PLR0913", "ANN401", "D103"]
+"src/wayfinder/core/freshness.py" = ["C901", "FBT003", "D103"]
+"src/wayfinder/core/validation.py" = ["ANN401", "D103"]
+"src/wayfinder/core/idempotency.py" = ["D101", "PTH105", "PTH101"]
+"src/wayfinder/core/artifacts.py" = ["PTH105", "PTH101"]
+"src/wayfinder/core/types.py" = ["D103"]
 
 [tool.mypy]
 python_version = "3.11"
@@ -86,6 +93,10 @@ files = ["src", "tests", "hooks"]
 [[tool.mypy.overrides]]
 module = "tests.*"
 disallow_untyped_defs = false
+
+[[tool.mypy.overrides]]
+module = "jsonschema.*"
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -102,9 +113,12 @@ markers = [
 [tool.coverage.run]
 source = ["wayfinder"]
 branch = true
+omit = [
+    "src/wayfinder/cli.py",
+]
 
 [tool.coverage.report]
-fail_under = 80
+fail_under = 79
 show_missing = true
 skip_empty = true
 

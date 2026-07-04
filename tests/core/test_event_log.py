@@ -6,9 +6,10 @@ from pathlib import Path
 
 import pytest
 
+from wayfinder.core.errors import StorageConflictError
 from wayfinder.core.event_log import EventLog
 from wayfinder.core.hash_chain import CorruptEventLogError
-from wayfinder.core.lock import AppendLock, StorageConflictError
+from wayfinder.core.lock import AppendLock
 
 
 def _event_template(**overrides: object) -> dict[str, object]:
@@ -36,6 +37,18 @@ def test_append_and_read_round_trip(tmp_path: Path) -> None:
     assert events[0]["seq"] == 1
     assert events[1]["seq"] == 2
     assert events[1]["prev_event_hash"] == events[0]["event_hash"]
+
+
+def test_append_many_atomic(tmp_path: Path) -> None:
+    log = EventLog.for_goal(tmp_path, "goal_01")
+    appended = log.append_many(
+        [
+            _event_template(event_id="evt_00000001"),
+            _event_template(event_id="evt_00000002", type="observation.recorded"),
+        ],
+    )
+    assert len(appended) == 2
+    assert appended[1]["prev_event_hash"] == appended[0]["event_hash"]
 
 
 def test_corrupt_partial_line_raises(tmp_path: Path) -> None:

@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://curtcox.github.io/wayfinder/schemas/wip.goal/0.1.json",
+  "title": "wip.goal/0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "protocol_version",
+    "goal_id",
+    "created_at",
+    "actor",
+    "description",
+    "workspace_uri",
+    "goal_status"
+  ],
+  "properties": {
+    "schema": { "const": "wip.goal/0.1" },
+    "protocol_version": { "$ref": "https://curtcox.github.io/wayfinder/schemas/common/0.1.json#/$defs/protocol_version" },
+    "goal_id": { "type": "string", "minLength": 1 },
+    "created_at": { "$ref": "https://curtcox.github.io/wayfinder/schemas/common/0.1.json#/$defs/rfc3339" },
+    "actor": { "$ref": "https://curtcox.github.io/wayfinder/schemas/common/0.1.json#/$defs/actor" },
+    "description": { "type": "string" },
+    "workspace_uri": { "type": "string", "pattern": "^file:" },
+    "goal_status": {
+      "type": "string",
+      "enum": ["pending", "running", "waiting", "blocked", "succeeded", "failed", "cancelled"]
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "max_auto_risk_level": {
+          "type": "string",
+          "enum": ["none", "low", "medium", "high", "critical"]
+        }
+      }
+    },
+    "metadata": { "type": "object" },
+    "run_id": { "$ref": "https://curtcox.github.io/wayfinder/schemas/common/0.1.json#/$defs/run_id" }
+  }
+}

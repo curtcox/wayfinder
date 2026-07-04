@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://curtcox.github.io/wayfinder/schemas/common/0.1.json",
+  "title": "WIP common types",
+  "$defs": {
+    "protocol_version": {
+      "type": "string",
+      "const": "0.1"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "rfc3339": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "actor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "id", "authority"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["human", "executor", "wayfinder", "system"]
+        },
+        "id": { "type": "string", "minLength": 1 },
+        "display_name": { "type": "string" },
+        "authority": {
+          "type": "string",
+          "enum": ["observer", "operator", "owner", "policy_admin"]
+        },
+        "authenticated": { "type": "boolean" }
+      }
+    },
+    "run_id": {
+      "type": ["null"]
+    }
+  }
+}

@@ -14,8 +14,7 @@ if TYPE_CHECKING:
     from collections.abc import Generator
 
 
-class StorageConflictError(Exception):
-    """Raised when the append lock cannot be acquired or is invalid."""
+from wayfinder.core.errors import StorageConflictError
 
 
 @dataclass(frozen=True)

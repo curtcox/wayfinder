@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://curtcox.github.io/wayfinder/schemas/wip.event/0.1.json",
+  "title": "wip.event/0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "protocol_version",
+    "event_id",
+    "type",
+    "time",
+    "goal_id",
+    "seq",
+    "source",
+    "actor",
+    "prev_event_hash",
+    "event_hash",
+    "data"
+  ],
+  "properties": {
+    "schema": { "const": "wip.event/0.1" },
+    "protocol_version": { "$ref": "https://curtcox.github.io/wayfinder/schemas/https://curtcox.github.io/wayfinder/schemas/common/0.1.json#/$defs/protocol_version" },
+    "event_id": { "type": "string", "minLength": 1 },
+    "type": { "type": "string", "minLength": 1 },
+    "time": { "$ref": "https://curtcox.github.io/wayfinder/schemas/common/0.1.json#/$defs/rfc3339" },
+    "goal_id": { "type": "string", "minLength": 1 },
+    "seq": { "type": "integer", "minimum": 1 },
+    "source": { "type": "string", "minLength": 1 },
+    "actor": { "$ref": "https://curtcox.github.io/wayfinder/schemas/common/0.1.json#/$defs/actor" },
+    "subject": { "type": "string" },
+    "correlation_id": { "type": "string" },
+    "causation_id": { "type": "string" },
+    "invalidates_open_recommendations": { "type": "boolean" },
+    "prev_event_hash": {
+      "oneOf": [
+        { "type": "null" },
+        { "$ref": "https://curtcox.github.io/wayfinder/schemas/common/0.1.json#/$defs/sha256" }
+      ]
+    },
+    "event_hash": {
+      "oneOf": [
+        { "type": "null" },
+        { "$ref": "https://curtcox.github.io/wayfinder/schemas/common/0.1.json#/$defs/sha256" }
+      ]
+    },
+    "run_id": { "$ref": "https://curtcox.github.io/wayfinder/schemas/common/0.1.json#/$defs/run_id" },
+    "data": { "type": "object" }
+  }
+}

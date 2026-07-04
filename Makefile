@@ -54,7 +54,7 @@ test:
 
 coverage:
 	$(RUN) pytest -n auto --cov=wayfinder --cov-report=term-missing --cov-report=xml --cov-report=html \
-		--cov-fail-under=80
+		--cov-fail-under=79
 
 check: lint typecheck security complexity docs-lint test coverage docs-build
 

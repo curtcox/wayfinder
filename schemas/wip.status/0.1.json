@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://curtcox.github.io/wayfinder/schemas/wip.status/0.1.json",
+  "title": "wip.status/0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "protocol_version",
+    "goal_id",
+    "run_id",
+    "observed_at",
+    "goal_status",
+    "reason_code",
+    "progress",
+    "last_issued_recommendation_id",
+    "open_recommendation_id",
+    "last_event_seq",
+    "event_log_head",
+    "needs"
+  ],
+  "properties": {
+    "schema": { "const": "wip.status/0.1" },
+    "protocol_version": { "$ref": "https://curtcox.github.io/wayfinder/schemas/common/0.1.json#/$defs/protocol_version" },
+    "goal_id": { "type": "string", "minLength": 1 },
+    "run_id": { "$ref": "https://curtcox.github.io/wayfinder/schemas/common/0.1.json#/$defs/run_id" },
+    "observed_at": { "$ref": "https://curtcox.github.io/wayfinder/schemas/common/0.1.json#/$defs/rfc3339" },
+    "goal_status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "running",
+        "waiting",
+        "blocked",
+        "succeeded",
+        "failed",
+        "cancelled",
+        "skipped",
+        "superseded",
+        "unknown"
+      ]
+    },
+    "reason_code": {
+      "oneOf": [{ "type": "null" }, { "type": "string" }]
+    },
+    "progress": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["summary", "percent", "completed_steps", "known_remaining_steps"],
+      "properties": {
+        "summary": { "type": "string" },
+        "percent": {
+          "oneOf": [{ "type": "null" }, { "type": "number", "minimum": 0, "maximum": 100 }]
+        },
+        "completed_steps": { "type": "integer", "minimum": 0 },
+        "known_remaining_steps": {
+          "oneOf": [{ "type": "null" }, { "type": "integer", "minimum": 0 }]
+        }
+      }
+    },
+    "last_issued_recommendation_id": {
+      "oneOf": [{ "type": "null" }, { "type": "string" }]
+    },
+    "open_recommendation_id": {
+      "oneOf": [{ "type": "null" }, { "type": "string" }]
+    },
+    "last_event_seq": { "type": "integer", "minimum": 0 },
+    "event_log_head": {
+      "oneOf": [{ "type": "null" }, { "$ref": "https://curtcox.github.io/wayfinder/schemas/common/0.1.json#/$defs/sha256" }]
+    },
+    "needs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "summary"],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": ["user_input", "approval", "capability", "dependency", "credentials"]
+          },
+          "reason_code": { "type": "string" },
+          "summary": { "type": "string" }
+        }
+      }
+    }
+  }
+}

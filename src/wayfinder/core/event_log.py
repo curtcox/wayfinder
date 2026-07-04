@@ -44,17 +44,29 @@ class EventLog:
 
     def append(self, event: dict[str, Any]) -> dict[str, Any]:
         """Append a single event with hash-chain stamping and durability."""
+        return self.append_many([event])[0]
+
+    def append_many(self, events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Append multiple events atomically with hash-chain stamping."""
+        if not events:
+            return []
         self.path.parent.mkdir(parents=True, exist_ok=True)
         existing = self.read_all()
         prev_hash = existing[-1]["event_hash"] if existing else None
         next_seq = (existing[-1]["seq"] + 1) if existing else 1
-        stamped = with_event_hash({**event, "seq": next_seq}, prev_event_hash=prev_hash)
-        line = json.dumps(stamped, separators=(",", ":"), ensure_ascii=False) + "\n"
+        stamped_events: list[dict[str, Any]] = []
+        lines: list[str] = []
+        for event in events:
+            stamped = with_event_hash({**event, "seq": next_seq}, prev_event_hash=prev_hash)
+            stamped_events.append(stamped)
+            lines.append(json.dumps(stamped, separators=(",", ":"), ensure_ascii=False) + "\n")
+            prev_hash = stamped["event_hash"]
+            next_seq += 1
         with self.path.open("a", encoding="utf-8") as handle:
-            handle.write(line)
+            handle.writelines(lines)
             handle.flush()
             os.fsync(handle.fileno())
-        return stamped
+        return stamped_events
 
     def _read_all_unchecked(self) -> list[dict[str, Any]]:
         if not self.path.exists():
