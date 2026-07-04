@@ -1,0 +1,95 @@
+name: Main
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  check:
+    name: Full check suite and Pages deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --extra dev --extra docs
+
+      - name: Install docs lint tools
+        run: |
+          npm install -g markdownlint-cli2
+          curl -sSfL https://github.com/lycheeverse/lychee/releases/download/lychee-v0.9.0/lychee-x86_64-unknown-linux-gnu.tar.gz \
+            | tar xz -C /usr/local/bin lychee
+
+      - name: Lint and analysis
+        run: make lint typecheck security complexity docs-lint
+
+      - name: Run tests with reports
+        run: |
+          mkdir -p reports-out/pytest reports-out/coverage
+          uv run pytest -n auto \
+            --html=reports-out/pytest/report.html --self-contained-html \
+            --cov=wayfinder --cov-report=html:reports-out/coverage \
+            --cov-report=json:reports-out/coverage/coverage.json \
+            --cov-fail-under=80
+
+      - name: Build documentation site
+        run: uv run mkdocs build
+
+      - name: Publish reports into site
+        run: |
+          mkdir -p site/reports
+          cp -r reports-out/pytest site/reports/
+          cp -r reports-out/coverage site/reports/
+          SHA=$(git rev-parse HEAD)
+          DATE=$(date -u +"%Y-%m-%d %H:%M UTC")
+          cat > site/reports/index.html <<EOF
+          <!DOCTYPE html>
+          <html lang="en">
+          <head><meta charset="utf-8"><title>Wayfinder Reports</title></head>
+          <body>
+          <h1>Wayfinder Reports</h1>
+          <p>Commit <code>${SHA}</code> · ${DATE}</p>
+          <ul>
+            <li><a href="pytest/report.html">pytest HTML report</a></li>
+            <li><a href="coverage/index.html">coverage HTML report</a></li>
+            <li><a href="coverage/coverage.json">coverage badge JSON</a></li>
+          </ul>
+          <p>Conformance matrix and tool summaries arrive in Phase 3.</p>
+          </body>
+          </html>
+          EOF
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: check
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

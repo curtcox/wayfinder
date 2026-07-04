@@ -1,0 +1,24 @@
+# MkDocs build output and generated copies of canonical root markdown
+site/
+docs/index.md
+docs/wayfinder-cli-user-guide.md
+docs/wayfinder-interaction-protocol-v0.1.md
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+htmlcov/
+.coverage
+*.egg-info/
+dist/
+build/
+
+# Editor
+.DS_Store
+.idea/
+.vscode/

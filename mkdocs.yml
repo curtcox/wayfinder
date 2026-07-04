@@ -1,0 +1,52 @@
+site_name: Wayfinder
+site_url: https://curtcox.github.io/wayfinder/
+repo_url: https://github.com/curtcox/wayfinder
+repo_name: curtcox/wayfinder
+edit_uri: edit/main/
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+    - search.suggest
+    - search.highlight
+    - toc.follow
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.tabbed:
+      alternate_style: true
+  - toc:
+      permalink: true
+
+plugins:
+  - search
+
+hooks:
+  - hooks/copy_canonical_docs.py
+
+nav:
+  - Home: index.md
+  - User Guide: wayfinder-cli-user-guide.md
+  - Protocol Spec: wayfinder-interaction-protocol-v0.1.md
+  - Reports: reports/index.md

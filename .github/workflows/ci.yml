@@ -1,0 +1,78 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches-ignore:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Python ${{ matrix.python-version }} on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        python-version: ["3.11", "3.12", "3.13"]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: uv sync --extra dev --extra docs
+
+      - name: Install markdownlint
+        run: npm install -g markdownlint-cli2
+
+      - name: Install lychee
+        uses: lycheeverse/lychee-action@v2
+        with:
+          args: --offline --no-progress README.md PLAN.md
+        continue-on-error: true
+
+      - name: Install lychee CLI
+        run: |
+          if [ "${{ runner.os }}" = "Linux" ]; then
+            curl -sSfL https://github.com/lycheeverse/lychee/releases/download/lychee-v0.9.0/lychee-x86_64-unknown-linux-gnu.tar.gz \
+              | tar xz -C /usr/local/bin lychee
+          else
+            curl -sSfL https://github.com/lycheeverse/lychee/releases/download/lychee-v0.9.0/lychee-aarch64-apple-darwin.tar.gz \
+              | tar xz -C /usr/local/bin lychee
+          fi
+
+      - name: make check
+        run: make check
+
+      - name: Upload coverage
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: |
+            coverage.xml
+            htmlcov/
+
+      - name: Upload test report
+        if: always() && matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
+        run: uv run pytest -n auto --html=report.html --self-contained-html
+        continue-on-error: true
+
+      - name: Upload pytest HTML
+        if: always() && matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-report
+          path: report.html
+          if-no-files-found: ignore
