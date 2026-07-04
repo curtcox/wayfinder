@@ -6,8 +6,9 @@
 
 This guide covers day-to-day use: creating goals, getting and acting on
 recommendations, reporting results, letting the executor drive, working in
-plain English through LLM front-ends, wrapping other command-line tools, and
-composing oracles. It is not the protocol reference —
+plain English through LLM front-ends, wrapping other command-line tools,
+seeing what different oracle and executor implementations look like under the
+hood, and composing oracles. It is not the protocol reference —
 when this guide and the spec disagree, the spec wins.
 
 **Tool names used here.** The spec defines the `oracle` command. The names
@@ -950,7 +951,7 @@ Notes that matter:
 - Authority is not negotiable in prose. `oracle-tell "cancel this goal,
   requirements changed"` composes a perfectly good `goal_cancel`, but it lands
   only if you are an authenticated `owner`/`policy_admin` — a front-end cannot
-  manufacture authority (§12).
+  manufacture authority (§13).
 - An override with a replacement action requires the full risk and idempotency
   metadata (§6.5). The front-end drafts it from what it knows about the
   command, and the executor policy-checks the replacement like anything else —
@@ -987,7 +988,7 @@ log is canonical. When an answer is load-bearing, follow the citation.
 
 ### 8.4 Review help before you approve
 
-The hard rule (§12) is: review `argv`, not prose. An LLM does not change who
+The hard rule (§13) is: review `argv`, not prose. An LLM does not change who
 decides — it changes how fast you can understand what you are deciding about.
 
 ```bash
@@ -1080,11 +1081,290 @@ changes that, however conversational the surface.
   original stays in the log, as always.
 - **The floor does not move.** No phrasing — yours or the front-end's — makes
   the executor auto-run what policy denies. When the conversation stops and
-  asks for an approval, that is the system working (§12).
+  asks for an approval, that is the system working (§13).
 
 ---
 
-## 9. Deference: oracles delegating to oracles
+## 9. Under the hood: ten machines, one protocol
+
+Nothing in this guide depends on *how* the oracle thinks or *how* the executor
+runs things. Those are the two replaceable black boxes; the protocol between
+them is the fixed part. This section makes that concrete with ten very
+different implementations — a to-do list, a classical planner, build graphs,
+issue trackers, a behavior tree, a workflow engine, configuration management,
+terminal automation, a coding agent, and a remote browser. All tool names are
+illustrative, like `oracle-exec`. You drive every one of them with exactly the
+commands you already know; what changes is what `oracle next` is doing when it
+decides, and what the executor is doing when it runs.
+
+The recurring pattern to notice: the technology supplies the *judgment* or the
+*muscle*, and the protocol supplies everything you have relied on so far — the
+log, the leases, the approvals, argv-is-law.
+
+### 9.1 Taskwarrior: urgency math as the oracle
+
+An oracle does not have to be clever to be useful. `oracle-tw` keeps a
+Taskwarrior database per goal: creating the goal seeds tasks (with due dates,
+priorities, and `depends:` edges parsed from your prose), and `oracle next` is
+little more than `task ready limit:1` — Taskwarrior's own urgency calculation
+over priority, deadlines, dependencies, and age picks the step.
+
+```bash
+oracle-do --oracle oracle-tw "Prepare the quarterly compliance evidence:
+export the access logs, run the audit script on them, and file the report by
+Friday. The audit script can't run until the export exists."
+```
+
+```text
+goal_q3_01 created (3 tasks seeded; 1 dependency)
+rec_01  export access logs      urgency 8.1              ran, exit 0
+rec_02  run audit script        (unblocked by rec_01)    ran, exit 0
+rec_03  file the report         due:friday, urgency 9.4  needs approval (network_write)
+```
+
+Tasks whose annotations carry an `argv` become `shell` actions; tasks with no
+runnable annotation surface as `question` recommendations for a human to
+handle. `action_result` completes tasks, observations add or modify them, and
+`oracle explain` prints the urgency arithmetic. The `depends:` edge is why
+rec_02 waited for rec_01 — decades of to-do-list pragmatics doing the
+scheduling, with the event log and executor policy unchanged around it.
+
+### 9.2 A PDDL planner: next steps you can prove
+
+`oracle-plan` compiles the goal into a PDDL problem against a domain file
+written by whoever operates the oracle, runs a classical planner (Fast
+Downward, for instance), and then deals the resulting plan out one step per
+`oracle next`.
+
+```bash
+oracle-do --oracle "oracle-plan --domain cluster-maintenance.pddl" \
+  "Upgrade node3 to kernel 6.9 without ever having fewer than two nodes serving."
+```
+
+The "never fewer than two serving" clause does not stay prose: it becomes an
+invariant in the planner's model, so every plan the oracle can issue maintains
+it by construction — drain node3 only after node4 is back in rotation, and so
+on. `oracle explain` returns the plan with each step's preconditions. When an
+action fails, or an observation contradicts the model ("node4 is actually down
+for a disk swap"), the oracle replans from the new state and the next
+recommendation comes from the new plan.
+
+The trade is explicit: this oracle cannot improvise. Prose that does not map
+onto domain predicates gets a `question` or a `blocked` recommendation rather
+than a guess. For goals where "provably reaches the goal in the model" beats
+"plausibly helpful", that rigidity is the feature.
+
+### 9.3 Make, Bazel, Ninja: the dependency graph decides
+
+"What should happen next" is the question a build system answers on every run,
+so `oracle-make` barely has to think: the goal is "this target is up to date",
+`oracle next` walks the out-of-date subgraph and issues the first ready recipe
+as a `shell` action, a `completed` result marks the node fresh, and the goal is
+done when nothing is stale.
+
+```bash
+oracle-do --oracle "oracle-make dist/report.pdf" \
+  "Bring the quarterly report up to date."
+```
+
+Preview mode maps to a dry run (`make -n`, `ninja -n`, `bazel build --nobuild`)
+— the oracle can always show you the remaining work without running any of it.
+An observation that a source file changed dirties that node and everything
+downstream, which is exactly the staleness semantics of §3.1 expressed as
+mtimes. Bazel and Ninja give the same shape with better graphs; Bazel's
+hermetic, sandboxed actions pair especially honestly with risk metadata, since
+`blast_radius: "workspace"` is enforced rather than asserted.
+
+### 9.4 GitHub Issues, Jira, Linear: the goal your team can see
+
+Here the tracker is not the brain — it is a live mirror, so people without a
+shell can participate. A bridge process (`oracle-bridge gh`, say) maps goal
+events onto an issue as they append: `goal.created` opens the issue, each
+issued recommendation is a comment, `needs` entries become labels, and
+`goal.completed` closes it. Traffic flows the other way too: a comment from an
+authorized teammate becomes an `approval` or `observation` update.
+
+```text
+#412  Rotate the staging TLS certificates              [oracle:goal_cert_01]
+  bot>    rec_03 wants to run: certbot renew --cert-name staging.acme.dev
+          risk: network_write, requires approval           +label needs-approval
+  jsmith> approved — renewal window confirmed with the platform team
+  bot>    approval recorded [seq 17]; executed, exit 0, changed: yes
+                                                           -label needs-approval
+```
+
+Two things keep this honest. Identity: the bridge maps commenter accounts to
+actors through an explicit allowlist, so a drive-by comment cannot become an
+approval — authority is checked the same way it always is (§6.2). And
+precedence: the event log is canonical and the issue is a view; if they ever
+disagree, the log wins and the bridge re-renders. Jira and Linear bridges are
+the same design with a different API underneath.
+
+### 9.5 A behavior tree engine: standing goals that never finish
+
+Some goals are not "reach a state" but "keep a state" — the shape behavior
+trees were built for. `oracle-bt` ticks a tree against a blackboard hydrated
+from the event log: condition nodes read recent observations and action
+results, action leaves emit `action` recommendations, and a node still in
+progress comes back as `wait`.
+
+```bash
+oracle-do --oracle "oracle-bt --tree staging-health.bt" \
+  "Keep the staging environment healthy until further notice."
+```
+
+```text
+rec_01  wait until 21:10          (all checks green)
+rec_02  probe /healthz            ran, exit 7   (condition failed)
+rec_03  restart app service       ran, exit 0   (fallback, step 1)
+rec_04  probe /healthz            ran, exit 0   (recovered)
+rec_05  wait until 21:25
+```
+
+The remediation ladder is a fallback node: restart the service, then clear the
+cache, then escalate — and "escalate" is just a `question` recommendation
+addressed to a human. The tree never reaches `done` on its own; you end the
+goal with a `goal_cancel` (§6.6) when the standing order expires. Every tick's
+decision is reconstructible from the log, which is more than most monitoring
+systems can say.
+
+### 9.6 Temporal: the executor that cannot forget
+
+Everything in §4 about the dumb executor's crash behavior — report before
+re-execute, replay updates with the same `update_id` — is a durability
+contract, and durability contracts are what Temporal sells. `oracle-exec` can
+be implemented as a Temporal workflow: each issue/accept/execute/report cycle
+is a set of activities, timeouts and retries map onto Temporal's primitives,
+and workflow state carries the `update_id`s.
+
+```bash
+oracle-exec-temporal run --goal-id "$GOAL"    # same loop, durable
+```
+
+Kill the worker mid-`make test` and the replacement resumes the workflow,
+checks whether the command completed, and submits the pending `action_result`
+with byte-identical content — the oracle answers `"replayed": true` if the
+original landed, and nothing runs twice. The §3.1 rule "once started, always
+reportable" stops being a discipline you maintain and becomes a property the
+engine enforces.
+
+One caution: this setup has two histories. Temporal's workflow history is
+machinery — private, replayable, disposable. The `.oracle` event log is the
+record. `oracle verify` audits the one that matters.
+
+### 9.7 Ansible: idempotency as the native tongue
+
+`oracle-wrap ansible` (§7 mechanics, unchanged) issues `ansible-playbook`
+invocations — and the fit is unusually good, because Ansible already speaks
+this guide's dialect. Check mode is preview:
+
+```bash
+oracle-do --oracle "oracle-wrap ansible" \
+  "Make sure the three web hosts in inventory/prod.ini run nginx 1.26 with
+   the hardened config and logrotate. Show me what would change first."
+```
+
+"Show me what would change first" becomes a first recommendation running
+`ansible-playbook --check --diff` — a dry run against the real hosts (still
+`network_read`, so still policy-gated). The apply run arrives as
+`network_write` / `external_side_effect` and waits for approval under default
+policy. Ansible's `changed=N` output maps directly onto `action_result.changed`
+(`no` when the run reports `changed=0`, `partial` when it changed some hosts
+and failed on others), and module idempotency is what lets the wrapper declare
+`safe_to_run_if_already_done: true` honestly — a timed-out apply can be
+re-recommended and re-run cheaply, because converging twice is a no-op.
+
+### 9.8 Expect / pexpect: commands that talk back
+
+Some commands refuse to be batch: installers that prompt, vendor CLIs whose
+login flow has no non-interactive mode. These arrive as actions with
+`pty: true`, plus an executor extension the pexpect-based executor
+understands — a declared dialogue table:
+
+```json
+"shell": {
+  "argv": ["vendor-cli", "login"],
+  "pty": true,
+  "x_expect_dialogue": [
+    { "expect": "Username:", "send": "svc-deploy" },
+    { "expect": "Password:", "send_secret_ref": "vendor/svc-deploy" },
+    { "expect": "Session established", "then": "eof" }
+  ]
+}
+```
+
+The review rule of §13 extends one level down: the dialogue table is part of
+the structured action, so read it like you read `argv` — it says exactly what
+will be typed at the child process, before it happens. The executor drives the
+pty with pexpect, and the full transcript lands as an artifact (§11) so the
+interaction is auditable afterwards. The password never appears anywhere: it
+is a `secret_ref` resolved at send time, and the transcript artifact is
+redacted before it is hashed and submitted, per §13's rules.
+
+### 9.9 Codex: a coding agent with the hands taken off
+
+An agentic coding tool normally proposes commands *and runs them*.
+`oracle-codex` keeps the judgment and removes the hands: the agent session is
+hydrated from the event log, and every command the agent tries to execute is
+intercepted and issued as an `action` recommendation instead. The
+`action_result` you (or the executor) report back is fed to the agent as if
+its tool call had run.
+
+```bash
+oracle-do --oracle oracle-codex \
+  "Find and fix the memory leak the soak test keeps hitting."
+```
+
+The effect is frontier-model judgment under OIP execution discipline. The
+agent literally cannot touch the system — its proposals become `argv` that
+policy gates, humans approve, and the log records, like anything else. Its
+stated reasoning surfaces through `oracle explain`.
+
+Note the symmetry with §8: there, the LLM sits on *your* side of the boundary,
+turning prose into protocol traffic; here it sits inside the oracle box,
+deciding what to recommend. The two compose — `oracle-do` in front,
+`oracle-codex` behind — and the protocol between them is what keeps either
+LLM from quietly exceeding its station.
+
+### 9.10 Browserbase: actions that click instead of exec
+
+For tasks whose only interface is a web page, `oracle-web` issues actions that
+drive a remote browser session on Browserbase:
+
+```bash
+oracle-do --oracle oracle-web \
+  "Download June's invoice PDF from the vendor billing portal into ./invoices."
+```
+
+The recommendation's `argv` invokes a browser runner whose input is a
+structured step script — navigate, fill selector, click, await download —
+carried in the action itself rather than referenced on disk, so the event log
+contains exactly what the browser was told to do. Reviewing this action means
+reading the steps the way you read `argv`: the same structured-fields-are-law
+rule, one level down. Portal credentials are `secret_ref`s resolved into the
+remote session, never into the log.
+
+Risk metadata is honest about the medium: `network_read` for pure retrieval,
+`external_side_effect` the moment a click mutates anything on the far side —
+so under default policy a form submission waits for approval just like
+`gh release create` did. Two artifacts come back: the downloaded PDF, and the
+Browserbase session recording — a video of what actually happened, attached to
+the log.
+
+### 9.11 What varies, what never does
+
+Across all ten: what varied is how "what next" gets computed — urgency math,
+plan search, dependency graphs, tree ticks, model inference — and what "run
+it" means — a fork/exec, a durable workflow, SSH to a fleet, a pty dialogue, a
+remote browser. What never varied: one open recommendation at a time, results
+always land, approvals scoped and perishable, structured fields as the only
+truth, the log as the record. That is the practical meaning of the protocol
+being the product: pick the machinery per problem, keep the habits — and the
+audit trail — identical.
+
+---
+
+## 10. Deference: oracles delegating to oracles
 
 An oracle can defer parts of a goal to other oracles — other instances of
 itself, or wrapped tools — using the same protocol. Because an oracle can never
@@ -1093,7 +1373,7 @@ executor: **the parent oracle recommends actions that drive a sub-oracle, and
 the executor runs those like any other action.** Delegation is just more
 `argv`.
 
-### 9.1 What it looks like
+### 10.1 What it looks like
 
 Say the parent goal is "cut and publish release 2.4.0". The parent oracle
 knows the release notes step is really a `git` problem and the publish step is
@@ -1145,7 +1425,7 @@ Results flow back the ordinary way: the sub-run's output/artifacts land in the
 parent's `action_result`, and the parent oracle reasons over them to pick its
 next step.
 
-### 9.2 Rules of thumb for delegation
+### 10.2 Rules of thumb for delegation
 
 - **Risk composes.** A delegated sub-goal's action inherits the risk of what
   the sub-oracle might do. A well-behaved parent declares the sub-goal's real
@@ -1168,7 +1448,7 @@ next step.
 
 ---
 
-## 10. Artifacts: large and binary outputs
+## 11. Artifacts: large and binary outputs
 
 Command output up to the inline limit (see
 `oracle capabilities | jq '.result.limits'`) rides inside `action_result.output`.
@@ -1206,7 +1486,7 @@ them in the first place.
 
 ---
 
-## 11. When things go wrong
+## 12. When things go wrong
 
 Every error is a JSON object with a stable `error.code` — branch on that, not
 the exit code.
@@ -1237,7 +1517,7 @@ General habits that keep you out of trouble:
 
 ---
 
-## 12. Security notes (the short version)
+## 13. Security notes (the short version)
 
 Full treatment — authentication, key management, secret stores, policy
 configuration — lives in the separate security document. The five things every
