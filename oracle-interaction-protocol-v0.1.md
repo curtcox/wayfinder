@@ -92,7 +92,7 @@ The default transport is Unix CLI with JSON over stdin/stdout.
 ```bash
 oracle capabilities --format=json
 oracle goal create --format=json < goal.json
-oracle status --goal-id GOAL --format=json
+oracle status --goal-id GOAL [--run-id RUN] --format=json
 oracle next --goal-id GOAL --run-id RUN --mode=preview|issue --explain=none|summary|structured|debug --format=json
 oracle update --goal-id GOAL --format=json < update.json
 oracle history --goal-id GOAL --since-seq N --format=jsonl
@@ -122,7 +122,9 @@ Recommended CLI exit codes:
 
 ## 1.3 Response Envelope
 
-Every non-history command MUST return either a command-specific result object or an error object. Implementations SHOULD include `request_id` when the caller provides one through an implementation-defined CLI flag or JSON-RPC request.
+Every successful non-history command MUST return an `oip.response/0.1` envelope. The command-specific result object MUST appear in `result`. A conforming v0.1 CLI MUST NOT emit raw success result objects. Error responses MUST emit an `oip.error/0.1` object directly and MUST NOT wrap the error in `oip.response/0.1`.
+
+Implementations SHOULD include `request_id` when the caller provides one through an implementation-defined CLI flag or JSON-RPC request. If the caller provides a request ID, the oracle MUST copy it unchanged into the response or error object.
 
 Successful command envelope:
 
@@ -172,7 +174,7 @@ internal_error
 
 `oracle capabilities` result MUST be an `oip.capabilities/0.1` object.
 
-`oracle goal create` input MUST be an `oip.goal_create/0.1` object. Result MUST include:
+`oracle goal create` input MUST be an `oip.goal_create/0.1` object. Goal creation MUST be idempotent by `create_id`. Re-submitting byte-identical canonical goal-create content with the same `create_id` MUST return the original goal, events, and status. Reusing `create_id` with different canonical content MUST fail with `invalid_input`. Result MUST include:
 
 ```json
 {
@@ -182,11 +184,11 @@ internal_error
 }
 ```
 
-`oracle status` MUST NOT append events by default. Its result MUST be an `oip.status/0.1` object.
+`oracle status` MUST NOT append events by default. Its result MUST be an `oip.status/0.1` object. If `--run-id` is omitted, `run_id` in the returned status MUST be `null` unless the goal has exactly one run in history.
 
 `oracle next --mode=preview` MUST NOT append events, create executable leases, or allocate an executable recommendation. The returned recommendation MUST have `"executable": false`.
 
-`oracle next --mode=issue` MUST atomically append exactly one `recommendation.issued` event and return the recommendation embedded in that event. The returned recommendation MUST have `"executable": true`.
+`oracle next --mode=issue` MUST atomically append exactly one `recommendation.issued` event and return the recommendation embedded in that event. If the returned recommendation has `recommendation_type:"action"`, it MUST have `"executable": true`; otherwise it MUST have `"executable": false`. If an open executable non-parallel recommendation already exists for the same goal, `oracle next --mode=issue` MUST fail with `storage_conflict` unless an implementation-defined reuse option is explicitly requested. v0.1 does not define that reuse option.
 
 `oracle update` MUST be idempotent by `update_id`. Re-submitting byte-identical update content with the same `update_id` MUST return the original appended events and status. Reusing `update_id` with different content MUST fail with `invalid_input`. Result MUST include:
 
@@ -203,7 +205,7 @@ internal_error
 
 `oracle history --since-seq N` MUST return events with `seq > N`. Use `--since-seq 0` to read from the beginning.
 
-`oracle explain` MUST return an explanation for a known recommendation in history. It MUST fail with `invalid_input` for unknown IDs. It MUST NOT fabricate an explanation for a recommendation that was never issued or previewed in the current command result.
+`oracle explain` MUST return an explanation for a known issued recommendation in history. It MUST fail with `invalid_input` for unknown IDs and for preview-only recommendation IDs. Preview explanations are addressable only inline in the `oracle next --mode=preview` response.
 
 ## 1.5 Optional JSON-RPC Mode
 
@@ -223,7 +225,7 @@ oracle.explain
 shutdown
 ```
 
-JSON-RPC request `id` is the protocol `request_id`. JSON-RPC errors MUST map to `oip.error/0.1` codes in the error `data` field. Cancellation is optional; if unsupported, the server MUST advertise that in capabilities.
+JSON-RPC request `id` is the protocol `request_id`. JSON-RPC success `result` MUST be the same command-specific result object that would appear in the CLI `oip.response/0.1.result` field; JSON-RPC MUST NOT nest an `oip.response/0.1` envelope inside `result`. JSON-RPC errors MUST map to `oip.error/0.1` codes in the error `data` field, and `error.data` MUST contain an `oip.error/0.1` object. Cancellation is optional; if unsupported, the server MUST advertise that in capabilities.
 
 ---
 
@@ -244,6 +246,8 @@ req_...    command or RPC request
 ```
 
 Timestamps MUST be RFC 3339 UTC strings. Implementations MUST preserve received timestamps but MAY add their own event `time` when appending.
+
+When this specification says byte-identical canonical content, it means the object serialized with RFC 8785 JSON canonicalization after removing transport-only fields such as `request_id`. Implementations MUST compare the canonical bytes, not pretty-printed input bytes.
 
 ## 2.1 Actor
 
@@ -267,10 +271,12 @@ Authority is only meaningful inside the local trust domain. If the implementatio
 
 ```json
 {
+  "schema": "oip.artifact/0.1",
+  "protocol_version": "0.1",
   "artifact_id": "art_01",
   "uri": "file:.oracle/goals/goal_01/artifacts/sha256/ab/abc123...",
   "media_type": "text/plain",
-  "sha256": "abc123...",
+  "sha256": "sha256:abc123...",
   "bytes": 15322,
   "redacted": false,
   "redaction": null,
@@ -278,7 +284,9 @@ Authority is only meaningful inside the local trust domain. If the implementatio
 }
 ```
 
-Artifact `uri` values using `file:` MUST be relative to the goal workspace unless absolute paths are explicitly allowed by policy. Artifacts MUST be content-addressed by post-redaction bytes. `bytes` is the byte count of stored bytes. Executors MUST verify the digest before submitting an artifact reference.
+Required fields: `schema`, `protocol_version`, `artifact_id`, `uri`, `media_type`, `sha256`, `bytes`, `redacted`.
+
+Artifact `uri` values using `file:` MUST be relative to the goal workspace unless absolute paths are explicitly allowed by policy. Implementations MUST normalize artifact paths, reject `..`, reject symlink escapes, and reject absolute path substitution unless local policy explicitly allows it. Artifacts MUST be content-addressed by post-redaction bytes. `bytes` is the byte count of stored bytes. Executors MUST verify the digest before submitting an artifact reference, and oracles MUST verify it before appending an event that references the artifact.
 
 ---
 
@@ -290,6 +298,7 @@ Artifact `uri` values using `file:` MUST be relative to the goal workspace unles
 {
   "schema": "oip.goal_create/0.1",
   "protocol_version": "0.1",
+  "create_id": "create_01",
   "created_at": "2026-07-04T18:00:00Z",
   "actor": {
     "type": "human",
@@ -325,7 +334,7 @@ Created goal:
 }
 ```
 
-`description` and `workspace_uri` are required. `policy` and `metadata` are optional.
+`create_id`, `description`, and `workspace_uri` are required. `policy` and `metadata` are optional. `create_id` is an opaque idempotency key for the goal creation request and MUST be unique within the oracle storage domain.
 
 ---
 
@@ -342,6 +351,8 @@ A recommendation is the oracle's answer to "what next?"
   "recommendation_id": "rec_01",
   "issued_at": "2026-07-04T18:22:11Z",
   "executable": true,
+  "parallel": false,
+  "supersedes": [],
   "lease": {
     "lease_id": "lease_01",
     "lease_expires_at": "2026-07-04T18:32:11Z"
@@ -434,6 +445,10 @@ A recommendation is the oracle's answer to "what next?"
 
 For `recommendation_type: "action"`, the fields `action`, `risk`, `idempotency`, `basis`, and `expires_at` are required. For `done`, `blocked`, `unsafe`, `question`, and `wait`, `action` MUST be absent unless the type's schema explicitly permits it.
 
+All recommendations MUST include `schema`, `protocol_version`, `goal_id`, `run_id`, `recommendation_id`, `issued_at`, `executable`, `oracle`, `basis`, `recommendation_type`, `summary`, `goal_status`, and `confidence`. Issued executable recommendations MUST include `lease`. Preview recommendations MUST set `executable:false`, MUST omit `lease`, and MUST NOT reserve the `recommendation_id` for later execution.
+
+v0.1 does not support parallel executable recommendations. `parallel` MUST be `false` or absent. `supersedes` MUST be an array of recommendation IDs and defaults to all open executable recommendations for the same goal when a new executable recommendation is issued.
+
 ## 4.1 Recommendation Types
 
 ```text
@@ -443,6 +458,16 @@ wait        do not execute; re-query after time or event condition
 blocked     oracle cannot suggest progress without external change
 done        oracle believes the goal is complete
 unsafe      oracle refuses to suggest because all known next steps violate policy
+```
+
+Required payload fields by non-action type:
+
+```text
+question    question.question_id, question.prompt
+wait        wait.until_time or wait.until_event
+blocked     reason_code, reason
+done        reason
+unsafe      reason_code, reason
 ```
 
 `done` is a recommendation type, not an action result. Goal terminal state is represented as status `succeeded`, `failed`, or `cancelled`.
@@ -456,17 +481,37 @@ An issued recommendation is executable only if all conditions are true:
 3. The current event log head matches `basis.event_log_head`, or every intervening event is explicitly marked `invalidates_open_recommendations: false`.
 4. `expires_at` and `lease.lease_expires_at` are in the future.
 5. No terminal action event exists for the same `recommendation_id` and `action.action_id`.
-6. No newer non-parallel `recommendation.issued` event has superseded it.
+6. No newer executable `recommendation.issued` event has superseded it.
 
 If any condition fails, the executor MUST NOT execute the action and the oracle MUST reject execution updates with `stale_recommendation`.
+
+Events for the same `recommendation_id` and `action.action_id` that record the normal lifecycle of an already accepted action MUST NOT make that action's terminal update stale. `recommendation.accepted`, `action.started`, and `action.output_recorded` for the same recommendation/action MUST set `invalidates_open_recommendations:false`. Terminal action events invalidate the open recommendation.
 
 `oracle next --mode=issue` MUST be atomic with respect to the event log head. If another writer changes the head during issuance, the command MUST retry against the new head or fail with `storage_conflict`.
 
 ## 4.3 Action Kinds
 
+All actions MUST include `action_id`, `kind`, and `title`. The object for the selected kind MUST be present, and objects for other action kinds MUST be absent. Unknown action kinds MUST be rejected unless they use an advertised namespaced extension and local policy allows it.
+
 ### `shell`
 
 A shell action MUST provide `shell.argv`. `command_for_display` is advisory and MUST NOT be executed.
+
+Required `shell` fields:
+
+```text
+argv
+cwd
+env.mode
+env.set
+stdin.mode
+pty
+timeout_seconds
+expected_exit_codes
+requires_shell
+```
+
+`argv` MUST be a non-empty array of strings. `cwd` MUST be a `file:` URI that resolves inside the goal workspace unless local policy explicitly allows a broader path. `timeout_seconds` MUST be a positive integer.
 
 `shell.env.mode` MUST be one of:
 
@@ -485,7 +530,11 @@ Environment entries in `set` MUST be objects:
 }
 ```
 
-If `requires_shell: true`, the executor MUST treat the action as elevated risk and MUST NOT run it automatically under the default policy.
+Environment entries MUST be either `{ "value": string, "sensitive": false }` or `{ "secret_ref": string, "sensitive": true }`. An event log MUST NOT contain an environment entry with both `sensitive:true` and `value`. Executors MUST resolve `secret_ref` only through local policy-approved secret stores.
+
+`stdin.mode` MUST be one of `none`, `inline`, or `artifact`. If `inline`, `stdin.text` MUST be present. If `artifact`, `stdin.artifact` MUST be an `oip.artifact/0.1` reference. Inline stdin MUST NOT exceed `capabilities.limits.max_inline_output_bytes` unless local policy explicitly allows it.
+
+If `requires_shell: true`, v0.1 executors MUST NOT run the action automatically under the default policy. The command MUST still be represented as `argv`; how to invoke a shell is implementation-defined and therefore not interoperable for automatic execution in v0.1. Portable automatic shell execution requires `requires_shell:false`.
 
 Timeout behavior: on timeout, the executor MUST terminate the child process or process group, record `timed_out: true`, and record signal information when available. Implementations SHOULD send a graceful termination signal before force-killing.
 
@@ -588,9 +637,11 @@ An update is any new information submitted to the oracle.
 
 Required update fields: `schema`, `protocol_version`, `update_id`, `goal_id`, `run_id`, `created_at`, `actor`, `update_type`.
 
-If an update refers to a recommendation or action, it MUST include `recommendation_id`, `action_id`, `basis_event_seq`, and `basis_event_head`.
+If an update refers to a recommendation or action, it MUST include `recommendation_id`, `action_id`, `basis_event_seq`, and `basis_event_head`. `basis_event_seq` and `basis_event_head` MUST identify the `recommendation.issued` event that authorized the action unless the update is a correction, observation, or heartbeat that is not attempting to execute or complete an action.
 
 Exactly one payload matching `update_type` MUST be present, except `recommendation_disposition` MAY be included before action payloads when the update intentionally combines disposition and result.
+
+If an update combines `recommendation_disposition` with `action_started` or `action_result`, the oracle MUST append the disposition event before the action event in the same atomic append operation. If any event in the operation cannot be appended, no event from that update may be appended.
 
 ## 5.1 Update Types
 
@@ -600,6 +651,7 @@ action_started
 action_result
 observation
 correction
+redaction
 override
 question_answer
 approval
@@ -615,9 +667,10 @@ action_started.started_at                    RFC 3339 timestamp
 action_result                                action result object
 observation.observations                     array of observation objects
 correction                                   correction object with scope, target_id, replacement, reason
+redaction                                   redaction object with target_event_id or target_artifact_id, replacement_artifact?, reason
 override                                     override object with decision and reason
 question_answer                             answer object with question_id and answer
-approval                                    approval object with decision granted|denied, approver, reason
+approval                                    approval object with decision requested|granted|denied, approver?, reason
 heartbeat                                   heartbeat object with status, observed_at, optional message
 policy_denied                               policy_denied object with reason_code and reason
 ```
@@ -751,6 +804,7 @@ action.output_recorded
 
 observation.recorded
 correction.recorded
+redaction.recorded
 
 approval.requested
 approval.granted
@@ -771,7 +825,7 @@ executor.policy_denied
 
 | Update | Event(s) |
 |---|---|
-| `recommendation_disposition=accepted` | `recommendation.accepted` |
+| `recommendation_disposition=accepted` | `recommendation.accepted`; if accepting a `done` recommendation, also `goal.completed` with `terminal_status="succeeded"` |
 | `recommendation_disposition=rejected` | `recommendation.rejected` |
 | `recommendation_disposition=skipped` | `recommendation.rejected` with `data.disposition="skipped"` |
 | `recommendation_disposition=overridden` | `recommendation.overridden` |
@@ -784,6 +838,8 @@ executor.policy_denied
 | `action_result.status=skipped` | `action.skipped` |
 | `observation` | `observation.recorded` |
 | `correction` | `correction.recorded` |
+| `redaction` | `redaction.recorded` |
+| `approval.decision=requested` | `approval.requested` |
 | `approval.decision=granted` | `approval.granted` |
 | `approval.decision=denied` | `approval.denied` |
 | `question_answer` | `question.answered` |
@@ -792,7 +848,76 @@ executor.policy_denied
 
 If an update contains artifact references, the oracle MUST verify artifact integrity before appending events. It MAY append `action.output_recorded` events before the terminal action event. If verification fails, no event from that update may be appended.
 
-## 6.4 Append, Locking, and Recovery
+For any update that refers to a `recommendation_id` and `action_id`, the oracle MUST reject a second terminal action event for the same pair unless the submitted update is an idempotent replay of the original `update_id`. Terminal action events are `action.completed`, `action.failed`, `action.timed_out`, `action.cancelled`, `action.blocked`, and `action.skipped`.
+
+Default `invalidates_open_recommendations` values:
+
+```text
+goal.created                         false
+goal.updated                         true
+goal.cancelled                       true
+goal.completed                       true
+recommendation.issued                true
+recommendation.superseded            true
+recommendation.accepted              false
+recommendation.rejected              true
+recommendation.overridden            true
+recommendation.expired               true
+action.started                       false
+action.output_recorded               false
+terminal action events               true
+observation.recorded                 true
+correction.recorded                  true
+approval.requested                   false
+approval.granted                     true
+approval.denied                      true
+question.asked                       false
+question.answered                    true
+executor.heartbeat                   false
+executor.policy_denied               true
+redaction.recorded                   true
+```
+
+An event MAY override the default by setting `invalidates_open_recommendations`, but lifecycle events for the same accepted recommendation/action MUST follow the `false` defaults above.
+
+## 6.4 Event Data Schemas
+
+The `data` object is schema-governed by event type. v0.1 events MUST use the following minimum payloads:
+
+```text
+goal.created                 { goal }
+goal.updated                 { changes, reason? }
+goal.cancelled               { reason_code?, reason }
+goal.completed               { terminal_status: "succeeded"|"failed"|"cancelled", reason? }
+recommendation.issued        { recommendation }
+recommendation.superseded    { recommendation_id, superseded_by, reason? }
+recommendation.accepted      { recommendation_id, action_id?, disposition: "accepted", reason? }
+recommendation.rejected      { recommendation_id, action_id?, disposition: "rejected"|"skipped"|"expired", reason_code?, reason? }
+recommendation.overridden    { recommendation_id, override, replacement_recommendation? }
+recommendation.expired       { recommendation_id, expired_at, reason? }
+action.started               { recommendation_id, action_id, started_at }
+action.completed             { recommendation_id, action_id, action_result }
+action.failed                { recommendation_id, action_id, action_result }
+action.blocked               { recommendation_id, action_id, action_result }
+action.skipped               { recommendation_id, action_id, action_result }
+action.cancelled             { recommendation_id, action_id, action_result }
+action.timed_out             { recommendation_id, action_id, action_result }
+action.output_recorded       { recommendation_id, action_id, artifacts }
+observation.recorded         { observations }
+correction.recorded          { correction }
+redaction.recorded           { target_event_id?, target_artifact_id?, replacement_artifact?, reason }
+approval.requested           { recommendation_id?, action_id?, approval }
+approval.granted             { recommendation_id?, action_id?, approval }
+approval.denied              { recommendation_id?, action_id?, approval }
+question.asked               { recommendation_id, question }
+question.answered            { recommendation_id?, question_answer }
+executor.heartbeat           { heartbeat }
+executor.policy_denied       { recommendation_id?, action_id?, policy_denied }
+```
+
+`recommendation.issued.data.recommendation` MUST contain the exact `oip.recommendation/0.1` returned to the caller. Action terminal events MUST contain the exact accepted `action_result` payload, after artifact verification and redaction.
+
+## 6.5 Append, Locking, and Recovery
 
 - Writers MUST acquire the per-goal append lock before reading the current head for append.
 - The default lock path is `.oracle/goals/{goal_id}/locks/append.lock`.
@@ -802,7 +927,9 @@ If an update contains artifact references, the oracle MUST verify artifact integ
 - Events MUST be immutable after append.
 - Snapshots MAY be written for speed, but the event log remains canonical.
 
-## 6.5 Hash Chain and Canonicalization
+An update that maps to multiple events MUST be appended atomically while holding the append lock. Implementations MUST NOT expose a prefix of the mapped events as a completed update result.
+
+## 6.6 Hash Chain and Canonicalization
 
 `prev_event_hash` and `event_hash` are REQUIRED.
 
@@ -815,7 +942,7 @@ Hash algorithm:
 
 For `seq=1`, `prev_event_hash` MUST be `null`. For `seq>1`, it MUST equal the previous event's `event_hash`.
 
-## 6.6 Snapshots and Migration
+## 6.7 Snapshots and Migration
 
 Snapshot schema:
 
@@ -832,6 +959,8 @@ Snapshot schema:
 ```
 
 A snapshot is valid only if its `event_log_head` matches the event at `seq`. Replaying from a snapshot plus later events MUST reconstruct the same visible status as replaying from event 1.
+
+Snapshot `state` is implementation-private in v0.1. A conforming implementation MUST be able to ignore all snapshots and reconstruct visible state from events alone.
 
 Events include their own `protocol_version`. Future migrations MUST be represented as appended events or out-of-band tooling that preserves the original log.
 
@@ -911,6 +1040,26 @@ unknown
 ```
 
 `last_issued_recommendation_id` means the latest recommendation issued into history. `open_recommendation_id` means the latest executable recommendation that has not been superseded, rejected, expired, or completed.
+
+## 7.5 Required Status Replay
+
+`oracle status` and any conforming replayer MUST derive visible status by applying events in increasing `seq` order and verifying the hash chain first.
+
+Minimum reducer rules:
+
+1. `goal.created` initializes `goal_status:"pending"`, `last_event_seq`, and `event_log_head`.
+2. `recommendation.issued` sets `goal_status` to the recommendation's `goal_status` unless the current goal status is terminal. It sets `last_issued_recommendation_id`.
+3. An executable `recommendation.issued` becomes `open_recommendation_id` and supersedes any previous open recommendation for the same goal unless the new recommendation's `supersedes` is empty and `parallel:true`. Since v0.1 does not support parallel executable recommendations, conforming v0.1 events MUST NOT use `parallel:true`.
+4. `recommendation.rejected`, `recommendation.overridden`, `recommendation.expired`, and `recommendation.superseded` clear `open_recommendation_id` when they target the current open recommendation.
+5. `action.started` sets `goal_status:"running"` unless the current goal status is terminal.
+6. Terminal action events clear `open_recommendation_id` when they target the current open recommendation. They MUST NOT by themselves mark the goal terminal; the oracle must issue `done` or append `goal.completed` to complete a goal.
+7. `question.asked` or an issued `question` recommendation sets `goal_status:"waiting"` and `reason_code:"needs_user_input"`.
+8. `executor.policy_denied` sets `goal_status:"blocked"` and `reason_code:"policy_denied"` unless the current goal status is terminal.
+9. `correction.recorded`, `observation.recorded`, and `question.answered` do not by themselves determine terminal status; they may invalidate open recommendations according to their event flag.
+10. `goal.completed` sets `goal_status` to `data.terminal_status` and clears `open_recommendation_id`.
+11. `goal.cancelled` sets `goal_status:"cancelled"` and clears `open_recommendation_id`.
+
+If the reducer encounters an unknown required core event type or invalid event data, status MUST fail with `corrupt_event_log` or `unsupported_capability`; it MUST NOT guess.
 
 ---
 
@@ -1139,6 +1288,8 @@ unsafe
 
 A replacement action MUST include the same risk and idempotency metadata required for oracle-issued executable actions, or the executor MUST refuse to run it until the oracle or human supplies that metadata.
 
+When `override.decision` is `replace`, the override event MUST materialize the replacement as a normal executable recommendation in `recommendation.overridden.data.replacement_recommendation`. The replacement recommendation MUST include `basis`, `lease`, `expires_at`, `risk`, `idempotency`, and `action`, and MUST set `supersedes` to include the original recommendation. A dumb executor MUST treat the replacement exactly like an oracle-issued executable recommendation and MUST NOT execute a bare `replacement_action` directly.
+
 ## 10.3 Conflict Resolution
 
 Default authority precedence:
@@ -1172,7 +1323,6 @@ while status.goal_status not in ["succeeded", "failed", "cancelled"]:
 
     validate_schema(rec)
     reject_if_unknown_required_capability(rec)
-    reject_if_non_executable_or_stale(rec)
 
     if rec.recommendation_type == "done":
         oracle.update(recommendation_disposition=accepted)
@@ -1188,6 +1338,8 @@ while status.goal_status not in ["succeeded", "failed", "cancelled"]:
         oracle.update(recommendation_disposition=skipped, reason=missing_capability)
         status = oracle.status(goal_id)
         continue
+
+    reject_if_non_executable_or_stale(rec)
 
     decision = evaluate_local_policy(rec.action, rec.risk, rec.idempotency)
     if decision.denied:
@@ -1257,6 +1409,19 @@ If interruption occurs after external action execution but before update submiss
   "action_kinds": ["shell", "noop"],
   "precondition_kinds": ["path_exists", "command_available", "env_present", "approval"],
   "success_criteria_kinds": ["exit_code", "artifact_exists", "observation_recorded"],
+  "update_types": [
+    "recommendation_disposition",
+    "action_started",
+    "action_result",
+    "observation",
+    "correction",
+    "redaction",
+    "override",
+    "question_answer",
+    "approval",
+    "heartbeat",
+    "policy_denied"
+  ],
   "event_types": [
     "goal.created",
     "goal.updated",
@@ -1278,6 +1443,7 @@ If interruption occurs after external action execution but before update submiss
     "action.output_recorded",
     "observation.recorded",
     "correction.recorded",
+    "redaction.recorded",
     "approval.requested",
     "approval.granted",
     "approval.denied",
@@ -1286,7 +1452,7 @@ If interruption occurs after external action execution but before update submiss
     "executor.heartbeat",
     "executor.policy_denied"
   ],
-  "explanation_modes": ["none", "summary", "structured"],
+  "explanation_modes": ["none", "summary", "structured", "debug"],
   "dry_run_modes": ["preview", "issue"],
   "event_log": {
     "format": "jsonl",
@@ -1315,7 +1481,8 @@ Shell execution:
 
 - `argv` MUST be an array of strings.
 - `requires_shell: false` means no shell metacharacter interpretation.
-- `requires_shell: true` MUST require explicit approval under default policy.
+- `requires_shell: true` MUST require explicit approval under default policy and MUST NOT be automatically executed by a conforming v0.1 dumb executor.
+- Executors MUST derive local risk from `argv`, `cwd`, `env`, stdin, and artifact paths even when the oracle's `risk` metadata claims a lower risk.
 
 Paths:
 
@@ -1325,6 +1492,7 @@ Paths:
 Environment and secrets:
 
 - Sensitive environment values MUST NOT be written to event logs.
+- Sensitive environment entries MUST use `secret_ref`; plaintext `value` with `sensitive:true` is invalid.
 - Artifact redaction MUST happen before hashing and submission.
 - Actions with possible secret access MUST include `secrets_access` or `secrets: may_access|required`; executors SHOULD also detect obvious secret access from env requests and deny if metadata is missing.
 
@@ -1349,9 +1517,11 @@ Prose injection:
 The normative schemas are the object definitions in this document. Implementations SHOULD publish JSON Schema files matching these requirements. At minimum, validators MUST enforce:
 
 - Required common fields and `protocol_version`.
+- Mandatory `oip.response/0.1` envelopes for successful non-history CLI commands.
 - Closed core enums, with namespaced extension values allowed only when advertised in capabilities.
 - Conditional recommendation requirements by `recommendation_type`.
 - Conditional update payload requirements by `update_type`.
+- Event `data` payloads by event type.
 - `additionalProperties: false` for core objects except explicitly named `metadata`, `details`, `extensions`, or `x_*` fields.
 - RFC 3339 date-time strings.
 - SHA-256 digest format `sha256:<lowercase-hex>`.
@@ -1364,12 +1534,24 @@ IF recommendation_type == action:
   require action, action.action_id, risk, idempotency, basis, expires_at
   require executable boolean
   if executable == true require lease
+  forbid parallel == true in v0.1
 
 IF recommendation_type in [done, blocked, unsafe, question, wait]:
   forbid action unless that type's extension schema explicitly allows it
 ```
 
-## 14.2 Update Validation Rules
+## 14.2 Shell Validation Rules
+
+```text
+shell -> require argv, cwd, env, stdin, pty, timeout_seconds, expected_exit_codes, requires_shell
+argv -> non-empty array of strings
+cwd -> file URI resolving inside workspace unless policy allows broader access
+env.set entries -> either {value:string,sensitive:false} or {secret_ref:string,sensitive:true}
+stdin.mode -> one of none, inline, artifact
+requires_shell == true -> deny automatic execution under default v0.1 policy
+```
+
+## 14.3 Update Validation Rules
 
 ```text
 recommendation_disposition -> require disposition
@@ -1377,6 +1559,7 @@ action_started -> require recommendation_id, action_id, action_started
 action_result -> require recommendation_id, action_id, action_result
 observation -> require observations
 correction -> require correction
+redaction -> require redaction
 override -> require override
 question_answer -> require question_answer
 approval -> require approval
@@ -1384,13 +1567,14 @@ heartbeat -> require heartbeat
 policy_denied -> require policy_denied
 ```
 
-## 14.3 Event Validation Rules
+## 14.4 Event Validation Rules
 
 ```text
 require event_hash and prev_event_hash
 require data schema appropriate for type
 require seq == previous seq + 1
 require prev_event_hash == previous event_hash
+forbid duplicate terminal action event for recommendation_id/action_id except idempotent update replay
 ```
 
 ---
@@ -1447,9 +1631,9 @@ Pass: external action runs at most once.
 
 ## 15.7 Concurrent `next --mode=issue`
 
-Initial log: `goal.created seq=1`.  
-Two clients call `issue` concurrently.  
-Expected result: one atomic issued recommendation, or one winner and one `storage_conflict`; if reuse is implemented, both receive the same open recommendation.  
+Initial log: `goal.created seq=1`.
+Two clients call `issue` concurrently.
+Expected result: one atomic issued recommendation, and the other call returns `storage_conflict`.
 Pass: no two non-parallel executable recommendations exist.
 
 ## 15.8 Human Override Replacement
@@ -1494,3 +1678,70 @@ Initial data: snapshot at seq 50 with hash H and events 51-55.
 Replayer behavior: verifies snapshot base and applies later events.  
 Expected result: same status/head as full replay from seq 1.  
 Pass: replay is deterministic.
+
+## 15.14 Mandatory CLI Envelope
+
+Initial log: `goal.created seq=1`.
+Command: `oracle status --goal-id goal_01 --format=json`.
+Expected result: stdout is one JSON object with `schema="oip.response/0.1"` and `result.schema="oip.status/0.1"`.
+Pass: a client can parse every successful non-history command through the same envelope shape.
+
+## 15.15 Idempotent Goal Create
+
+Command input: same `oip.goal_create/0.1` object with `create_id="create_01"` submitted twice.
+Expected result: second response returns the original goal, original `goal.created` event, and original status.
+Pass: no second goal or second `goal.created` event is created.
+
+## 15.16 Conflicting Goal Create
+
+Command input: reuse `create_id="create_01"` with a different canonical goal-create object.
+Expected result: `invalid_input`; no event is appended.
+Pass: retry safety does not allow accidental goal mutation.
+
+## 15.17 Same-Action Lifecycle Is Not Stale
+
+Initial log: `recommendation.issued seq=2` with basis seq 1/head H1.
+Updates: executor submits accepted and started updates, then submits terminal `action_result` with `basis_event_seq=2` and `basis_event_head` equal to the issued event hash.
+Expected result: terminal event is accepted despite intervening `recommendation.accepted` and `action.started`.
+Pass: normal lifecycle events do not make the executing action stale.
+
+## 15.18 Duplicate Terminal Action Event
+
+Initial log: terminal `action.completed` exists for `recommendation_id=rec_01`, `action_id=act_01`.
+Update: different `update_id` submits another terminal result for the same pair.
+Expected result: `invalid_input` or `stale_recommendation`; no second terminal action event is appended.
+Pass: duplicate external execution cannot be legitimized by the log.
+
+## 15.19 Secret Environment Value Rejected
+
+Oracle response: shell action includes `env.set.API_KEY={"value":"secret","sensitive":true}`.
+Executor behavior: rejects schema/policy and does not execute.
+Expected result: no command execution; optional `executor.policy_denied` or `recommendation.rejected`.
+Pass: plaintext sensitive values do not enter event history.
+
+## 15.20 Preview Is Not Explainable Later
+
+Command: `oracle next --mode=preview` returns `recommendation_id=rec_preview_01`.
+Command: later `oracle explain --recommendation-id rec_preview_01`.
+Expected result: `invalid_input`.
+Pass: preview-only recommendations are not treated as durable history.
+
+## 15.21 Replacement Override Materializes Recommendation
+
+Initial log: open executable recommendation `rec_01`.
+Update: human override with `decision="replace"`.
+Expected event: `recommendation.overridden` with `data.replacement_recommendation` containing a full executable recommendation, including `basis`, `lease`, `expires_at`, `risk`, `idempotency`, and `action`.
+Pass: executor can validate the replacement without hidden judgment.
+
+## 15.22 JSON-RPC Result Shape
+
+Command: JSON-RPC `goal.status` request with `id="req_01"`.
+Expected result: JSON-RPC `result` is an `oip.status/0.1` object, not an embedded `oip.response/0.1` envelope.
+Pass: CLI and JSON-RPC correlation rules are equivalent without double wrapping.
+
+## 15.23 Accepting Done Completes Goal
+
+Initial log: issued non-executable `recommendation_type="done"` recommendation.
+Update: executor submits `recommendation_disposition=accepted` for that recommendation.
+Expected events: `recommendation.accepted` followed atomically by `goal.completed` with `terminal_status="succeeded"`.
+Pass: replayed status is `goal_status="succeeded"` and `open_recommendation_id=null`.
