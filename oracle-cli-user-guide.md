@@ -5,14 +5,16 @@
 **Assumes:** you are comfortable with a Unix shell, JSON, and `jq`.
 
 This guide covers day-to-day use: creating goals, getting and acting on
-recommendations, reporting results, letting the executor drive, wrapping other
-command-line tools, and composing oracles. It is not the protocol reference —
+recommendations, reporting results, letting the executor drive, working in
+plain English through LLM front-ends, wrapping other command-line tools, and
+composing oracles. It is not the protocol reference —
 when this guide and the spec disagree, the spec wins.
 
 **Tool names used here.** The spec defines the `oracle` command. The names
-`oracle-exec` (the dumb executor) and `oracle-wrap` (the universal CLI-tool
-wrapper) are illustrative placeholders — substitute whatever your installation
-provides. Security, key management, and permission policy are covered in a
+`oracle-exec` (the dumb executor), `oracle-wrap` (the universal CLI-tool
+wrapper), and the LLM-backed prose front-ends `oracle-do`, `oracle-tell`,
+`oracle-ask`, and `oracle-chat` (§8) are illustrative placeholders —
+substitute whatever your installation provides. Security, key management, and permission policy are covered in a
 separate document; this guide only flags the places where they matter.
 
 ---
@@ -60,6 +62,16 @@ oracle explain --goal-id GOAL --recommendation-id REC   # why it recommended tha
 oracle verify --goal-id GOAL                     # check log + artifact integrity
 ```
 
+And the LLM-backed prose front-ends (illustrative names, §8), for when you
+would rather type a sentence than compose JSON:
+
+```bash
+oracle-do "…a goal in plain language…"           # create a goal and drive it
+oracle-tell --goal-id GOAL "…anything…"          # prose -> the right structured update
+oracle-ask  --goal-id GOAL "…a question…"        # prose answers from the log (read-only)
+oracle-chat --goal-id GOAL                       # interactive session over the same verbs
+```
+
 Every non-history command prints exactly one JSON object on stdout — a
 `oip.response/0.1` envelope on success, an `oip.error/0.1` object on failure.
 `stderr` is for humans only. Exit code 0 means "the command worked", **not**
@@ -77,8 +89,9 @@ oracle status --goal-id goal_01 | jq '.result | {goal_status, open_recommendatio
 ## 2. Quick start: a complete session by hand
 
 This walkthrough drives one goal to completion manually. In practice you will
-usually let `oracle-exec` do steps 3–5 (see §4), but doing it by hand once
-teaches you what the executor does on your behalf.
+usually let `oracle-exec` do steps 3–5 (see §4), or skip the JSON entirely and
+work in prose (§8) — but doing it by hand once teaches you what those tools do
+on your behalf.
 
 ### 2.1 Create a goal
 
@@ -448,6 +461,10 @@ oracle history --goal-id "$GOAL" --since-seq 0 | tail -5 | jq -c '{seq, type}'
 
 ## 5. Watching and auditing: status, history, explain, verify
 
+These four commands are the raw feed. If you would rather ask "why is this
+stuck?" in English and get an answer synthesized from them, see `oracle-ask`
+(§8.3) — it is built on exactly these reads.
+
 ### 5.1 Status
 
 ```bash
@@ -525,7 +542,9 @@ conservative (only a partial final line may ever be truncated, after backup).
 ## 6. Talking back to the oracle
 
 `oracle update` is the single door for everything you want the oracle to know.
-Beyond dispositions and action results, the update types you will actually use:
+Beyond dispositions and action results, the update types you will actually use
+are below. (Each of these can also be produced from a plain-English sentence
+via `oracle-tell` — see §8.2 — which composes exactly these documents.)
 
 ### 6.1 Answering questions
 
@@ -572,6 +591,9 @@ oracle history --goal-id "$GOAL" --since-seq 0 \
   | jq 'select(.type=="recommendation.issued") | select(.data.recommendation.recommendation_id=="rec_04")
         | .data.recommendation.action.shell | {argv, cwd, env}'
 ```
+
+(§8.4 shows how an LLM front-end can make this review faster without taking
+the decision away from you.)
 
 ### 6.3 Observations: telling the oracle what you know
 
@@ -809,7 +831,260 @@ never appear in commands, logs, or events. (Key management: security document.)
 
 ---
 
-## 8. Deference: oracles delegating to oracles
+## 8. Working in prose: LLM front-ends
+
+Everything so far has you (or the executor) reading and writing JSON. A prose
+front-end puts an LLM between you and that JSON: you type ordinary — but
+precise — English, and the front-end composes the protocol traffic.
+`oracle-do`, `oracle-tell`, `oracle-ask`, and `oracle-chat` are illustrative
+names, like `oracle-exec`.
+
+Three facts keep this from being magic:
+
+1. **The front-end is on your side of the boundary, not the oracle's.** It is
+   just another actor speaking the same protocol: it composes
+   `oip.goal_create` and `oip.update` documents, calls `oracle` and
+   `oracle-exec`, and does the bookkeeping that makes hand-written updates
+   tedious (`update_id`s, `issued_event_seq`/`event_hash`, timestamps). It has
+   no special powers — executor policy gates it exactly as it gates you.
+2. **Prose goes in, structure comes out, and only the structure is real.**
+   Your sentence is translated into structured fields, and those fields are
+   what runs and what the log records. The convenience costs nothing in
+   auditability: `oracle history` shows exactly what was submitted on your
+   behalf, byte for byte.
+3. **Submitted immediately, audited after.** These front-ends do not stop to
+   show you the derived JSON before sending it — the guardrails that matter
+   (executor policy, scoped approvals, the immutable log) are downstream and
+   unaffected by phrasing. When a translation misses, you fix it the protocol
+   way, with a correction event, not an edit. A confirm-before-submit
+   front-end is a legitimate alternative configuration; it changes the feel,
+   not the protocol.
+
+### 8.1 Goals from a sentence: oracle-do
+
+```bash
+oracle-do "Make the tests in /home/curt/project pass. Don't modify anything
+outside the repo, and don't auto-run anything above low risk."
+```
+
+The front-end composes the `oip.goal_create` document — the intent becomes
+`description`, the named path becomes an absolute `workspace_uri`, and the
+risk limit becomes `policy.max_auto_risk_level: "low"` — then runs the
+executor loop and narrates:
+
+```text
+goal_01 created  (workspace file:/home/curt/project, max auto risk: low)
+rec_01  make test                    ran, exit 2 (3 failures in test_parser.py)
+rec_02  patch src/parser.py          ran, changed 1 file
+rec_03  make test                    ran, exit 0
+rec_04  done: "make test exits 0"    accepted
+goal_01 succeeded  (4 recommendations, 2m40s)
+```
+
+Notice the split it made. "Make the tests pass" is advisory prose in
+`description`, shaping what the oracle recommends. "Nothing above low risk" is
+a hard limit, so it belongs in `policy`, where it is enforced mechanically.
+When your prose contains a hard limit, verify it landed in a structured field:
+
+```bash
+oracle history --goal-id goal_01 --since-seq 0 \
+  | jq 'select(.type=="goal.created") | .data.goal | {description, policy}'
+```
+
+Wrapped tools (§7) compose naturally — this is the ffmpeg example with the
+JSON boilerplate gone:
+
+```bash
+cd /work/media
+oracle-do --oracle "oracle-wrap ffmpeg" \
+  "Convert every .mov in this directory to a 1080p H.264 .mp4 with the same
+   basename. Skip any that already have an .mp4. Keep the originals."
+```
+
+Every qualifier in that sentence does work: "same basename" pins the output
+naming, "skip any that already have" makes reruns cheap, "keep the originals"
+rules out cleanup-happy recommendations. That is what "ordinary albeit
+precise" means in practice.
+
+### 8.2 Prose in, updates out: oracle-tell
+
+One command for everything in §6. It reads the goal's current state (open
+recommendation, open question), classifies your sentence into the right
+`update_type`, fills in the envelope, and submits.
+
+```bash
+# Open question was "npm or pnpm?"          -> question_answer
+oracle-tell --goal-id "$GOAL" "pnpm"
+
+# Something you did outside the loop        -> observation (invalidates open rec)
+oracle-tell --goal-id "$GOAL" "I bumped the version in package.json to 2.4.0 by hand just now."
+
+# Purely informational                      -> observation, invalidates_open_recommendations: false
+oracle-tell --goal-id "$GOAL" "FYI, CI is red on main for unrelated reasons — this doesn't change what you should do next."
+
+# The oracle believes something wrong       -> correction
+oracle-tell --goal-id "$GOAL" "That parser test isn't failing because of our change; it fails on a clean checkout too."
+
+# "No, run this instead"                    -> override.replace, metadata drafted for you
+oracle-tell --goal-id "$GOAL" "Don't use npm test — this repo uses pnpm, run pnpm test instead."
+```
+
+Each invocation prints one line saying what it recorded:
+
+```text
+recorded observation upd_9f2c1a (invalidates rec_06; the oracle will rethink)
+```
+
+The audit reflex, since nothing was shown before submission — read back what
+was actually said on your behalf:
+
+```bash
+oracle history --goal-id "$GOAL" --since-seq 0 | tail -2 | jq -c '{seq, type, data}'
+```
+
+Notes that matter:
+
+- The front-end infers invalidation intent from wording ("FYI", "for context"
+  vs. "I changed…"). When the difference matters, say it explicitly, as in the
+  third example.
+- Authority is not negotiable in prose. `oracle-tell "cancel this goal,
+  requirements changed"` composes a perfectly good `goal_cancel`, but it lands
+  only if you are an authenticated `owner`/`policy_admin` — a front-end cannot
+  manufacture authority (§12).
+- An override with a replacement action requires the full risk and idempotency
+  metadata (§6.5). The front-end drafts it from what it knows about the
+  command, and the executor policy-checks the replacement like anything else —
+  a drafted `risk.level: "low"` on something that touches the network still
+  gets stopped.
+
+### 8.3 Questions about the goal: oracle-ask
+
+Pure reads. `oracle-ask` synthesizes an answer from `status`, `history`,
+`explain`, and `verify` — it never appends events.
+
+```bash
+oracle-ask --goal-id "$GOAL" "why is this stuck?"
+```
+
+```text
+Blocked on an approval: rec_04 wants to run
+    ["gh", "release", "create", "v2.4.0", "--notes-file", "notes.md"]
+in file:/work/release (network_write, requires_approval), issued 19:04 [seq 14].
+Nothing has executed since act_03 finished at 19:02 [seq 13].
+Your options: approve rec_04, run it yourself and report, or reject it with a reason.
+```
+
+```bash
+oracle-ask --goal-id "$GOAL" "what has actually changed on disk so far?"
+oracle-ask --goal-id "$GOAL" "summarize the last hour as a timeline"
+oracle-ask --goal-id "$GOAL" "did anything fail, and was it retried?"
+oracle-ask "which of my goals are waiting on me right now?"     # store-wide
+```
+
+Answers cite event `seq` numbers so every claim is checkable. The standing
+rule from §5.3 applies with full force: synthesized prose is advisory, the
+log is canonical. When an answer is load-bearing, follow the citation.
+
+### 8.4 Review help before you approve
+
+The hard rule (§12) is: review `argv`, not prose. An LLM does not change who
+decides — it changes how fast you can understand what you are deciding about.
+
+```bash
+oracle-ask --goal-id "$GOAL" --recommendation rec_04 \
+  "walk me through exactly what this will do and what the worst case is"
+```
+
+```text
+rec_04 runs, in file:/work/release:
+
+    gh release create v2.4.0 --notes-file notes.md
+
+• gh release create — creates a PUBLIC release on the repo's origin remote
+• v2.4.0            — this tag exists locally but has not been pushed [seq 11]
+• --notes-file      — notes.md, 41 lines, last written by act_03 [seq 13]
+
+Risk as declared: network_write, irreversible; requires_approval. Worst case:
+publishes to the wrong repository (if origin is not what you think) or with
+stale notes. This system cannot undo a published release.
+Before approving, check: git remote get-url origin; read notes.md.
+```
+
+Then the decision is yours — in prose, if you like:
+
+```bash
+oracle-tell --goal-id "$GOAL" "approve rec_04 — I read the argv and notes.md; publishing is intended."
+```
+
+That becomes an `approval` update with `decision: "granted"` and your sentence
+as the `reason`, scoped to rec_04 and perishable as always (§6.2).
+
+The one thing the front-end will not relieve you of: it quotes `argv` verbatim
+in every review precisely so that you have seen it. If the explanation and the
+`argv` ever seem to disagree, the `argv` is the truth and the explanation is a
+bug.
+
+### 8.5 Interactive: oracle-chat
+
+The same verbs, held in a conversation with context. Every turn is ordinary
+protocol traffic underneath — the transcript is a view; the event log is the
+record.
+
+```text
+$ oracle-chat --goal-id goal_rel_01
+chat: goal_rel_01 is blocked — rec_04 needs approval
+      (gh release create v2.4.0; network_write, irreversible).
+
+you>  what's in the notes file it wants to publish?
+chat: notes.md, 41 lines, written by act_03 [seq 13]. It still contains the
+      template placeholder "TODO: highlights" at line 5.
+
+you>  have it fix that first, then ask me about the release again
+chat: recorded observation upd_31c9 (invalidates rec_04)              [seq 15]
+      rec_05: replace the TODO placeholder in notes.md — low risk, executed
+                                                                   [seq 16-18]
+      rec_06: gh release create v2.4.0 … — needs approval (fresh
+      recommendation, so a fresh approval; the old one died with rec_04)
+
+you>  show me what it changed
+chat: act_05 replaced line 5 with three bullets summarizing the changes in
+      seq 4-12: parser fixes, the pnpm migration, and the CLI --json flag.
+
+you>  approve it
+chat: approval granted on rec_06 [seq 20]. Executing…
+      released: https://github.com/acme/thing/releases/tag/v2.4.0
+      goal_rel_01 succeeded.
+```
+
+Worth noticing: the approval did **not** carry over from rec_04 to rec_06.
+Approvals bind to one recommendation and die with it (§6.2); no front-end
+changes that, however conversational the surface.
+
+### 8.6 Habits for prose work
+
+- **Precision is still your job.** "Clean up the old releases" and "delete
+  releases older than v2.0.0, keeping the latest three" are different goals.
+  Ambiguous prose costs a round-trip — the front-end asks, or the oracle
+  issues a `question` recommendation.
+- **Hard limits go in structured fields.** Prose in `description` shapes the
+  oracle's recommendations; it does not bind them. If you say "never touch
+  prod", also make sure it is policy — `oracle-do` maps limit-shaped phrases
+  to `policy`, and §8.1 shows how to verify that it did.
+- **Keep an audit rhythm.** End a prose session with
+  `oracle-ask "what was submitted on my behalf today?"` — or go straight to
+  `oracle history | jq` if you would rather not have the LLM grade its own
+  homework.
+- **Corrections, not edits.** A mistranslated update is repaired the protocol
+  way: `oracle-tell --goal-id "$GOAL" "that last observation is wrong — I
+  bumped the version to 2.4.1, not 2.4.0"` appends a correction event; the
+  original stays in the log, as always.
+- **The floor does not move.** No phrasing — yours or the front-end's — makes
+  the executor auto-run what policy denies. When the conversation stops and
+  asks for an approval, that is the system working (§12).
+
+---
+
+## 9. Deference: oracles delegating to oracles
 
 An oracle can defer parts of a goal to other oracles — other instances of
 itself, or wrapped tools — using the same protocol. Because an oracle can never
@@ -818,7 +1093,7 @@ executor: **the parent oracle recommends actions that drive a sub-oracle, and
 the executor runs those like any other action.** Delegation is just more
 `argv`.
 
-### 8.1 What it looks like
+### 9.1 What it looks like
 
 Say the parent goal is "cut and publish release 2.4.0". The parent oracle
 knows the release notes step is really a `git` problem and the publish step is
@@ -870,7 +1145,7 @@ Results flow back the ordinary way: the sub-run's output/artifacts land in the
 parent's `action_result`, and the parent oracle reasons over them to pick its
 next step.
 
-### 8.2 Rules of thumb for delegation
+### 9.2 Rules of thumb for delegation
 
 - **Risk composes.** A delegated sub-goal's action inherits the risk of what
   the sub-oracle might do. A well-behaved parent declares the sub-goal's real
@@ -893,7 +1168,7 @@ next step.
 
 ---
 
-## 9. Artifacts: large and binary outputs
+## 10. Artifacts: large and binary outputs
 
 Command output up to the inline limit (see
 `oracle capabilities | jq '.result.limits'`) rides inside `action_result.output`.
@@ -931,7 +1206,7 @@ them in the first place.
 
 ---
 
-## 10. When things go wrong
+## 11. When things go wrong
 
 Every error is a JSON object with a stable `error.code` — branch on that, not
 the exit code.
@@ -962,7 +1237,7 @@ General habits that keep you out of trouble:
 
 ---
 
-## 11. Security notes (the short version)
+## 12. Security notes (the short version)
 
 Full treatment — authentication, key management, secret stores, policy
 configuration — lives in the separate security document. The five things every
@@ -1014,4 +1289,15 @@ oracle status --goal-id "$GOAL" | jq -r '.result.goal_status'
 # 6. Audit
 oracle verify  --goal-id "$GOAL" | jq '.result.ok'
 oracle history --goal-id "$GOAL" --since-seq 0 | jq -c '{seq, type, actor: .actor.id}'
+```
+
+The same session in prose (§8) — identical protocol traffic underneath:
+
+```bash
+oracle-do "Make the tests in /home/curt/project pass; nothing above low risk."  # 1-2
+oracle-ask  --goal-id "$GOAL" "why did it stop?"                                # 3
+oracle-tell --goal-id "$GOAL" "pnpm"                                            # 4 (whichever applies)
+oracle-tell --goal-id "$GOAL" "approve rec_04 — argv reviewed, intended"
+oracle-tell --goal-id "$GOAL" "I fixed the env var myself; try again"
+oracle-ask  --goal-id "$GOAL" "what was submitted on my behalf, and did we finish?"  # 5-6
 ```
