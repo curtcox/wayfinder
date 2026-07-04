@@ -1,9 +1,9 @@
-# Oracle Interaction Protocol v0.1 - Draft Specification
+# Wayfinder Interaction Protocol v0.1 - Draft Specification
 
 **Status:** Draft (revision 2 — interoperability fixes)
-**Scope:** A Unix/CLI-oriented protocol for a black-box oracle that tracks progress toward a goal, recommends next actions, accepts observations, and can be driven by either a human or a deliberately dumb executor.
+**Scope:** A Unix/CLI-oriented protocol for a black-box wayfinder that tracks progress toward a goal, recommends next actions, accepts observations, and can be driven by either a human or a deliberately dumb executor. In the conceptual sense, a wayfinder plays the role of an oracle: it answers "what next?" without exposing how it reasons.
 
-The oracle remains opaque. This specification standardizes only the protocol boundary: commands, schemas, event history, executor obligations, and safety defaults.
+The wayfinder remains opaque. This specification standardizes only the protocol boundary: commands, schemas, event history, executor obligations, and safety defaults.
 
 ## Changes in Revision 2
 
@@ -18,10 +18,10 @@ The oracle remains opaque. This specification standardizes only the protocol bou
 - JSON-RPC shapes for `initialize`, `shutdown`, `goal.history`, and error-code mapping are defined.
 - Artifact storage location, URI resolution, and the write protocol are defined; a shared filesystem is an explicit v0.1 assumption.
 - Non-action recommendation payloads are nested under type-named objects (`blocked`, `done`, `unsafe`, `question`, `wait`).
-- Executor-side retry is removed: retries happen only through oracle re-issuance; an action with any terminal event is never re-executed.
+- Executor-side retry is removed: retries happen only through wayfinder re-issuance; an action with any terminal event is never re-executed.
 - Update fields `basis_event_seq`/`basis_event_head` are renamed `issued_event_seq`/`issued_event_hash`.
 - The goal object's `status` field is renamed `goal_status`.
-- Exit-code table extended; `--request-id` standardized; `oracle verify` added as an optional command; numerous enum, optionality, and security clarifications.
+- Exit-code table extended; `--request-id` standardized; `wayfinder verify` added as an optional command; numerous enum, optionality, and security clarifications.
 
 ## Prior-Art Basis
 
@@ -46,7 +46,7 @@ The oracle remains opaque. This specification standardizes only the protocol bou
 goal + canonical event log
       |
       v
-oracle next/status
+wayfinder next/status
       |
       v
 recommendation
@@ -66,15 +66,15 @@ repeat
 
 ## 0.1 Non-Negotiable Invariants
 
-1. The oracle MUST NOT mutate the outside environment. It MAY append oracle events, but only as the defined result of `oracle goal create`, `oracle next --mode=issue`, or `oracle update`. The oracle MUST NOT append events spontaneously.
+1. The wayfinder MUST NOT mutate the outside environment. It MAY append wayfinder events, but only as the defined result of `wayfinder goal create`, `wayfinder next --mode=issue`, or `wayfinder update`. The wayfinder MUST NOT append events spontaneously.
 2. The executor MUST NOT infer hidden intent. It executes only supported structured actions.
 3. Every executable recommendation MUST have a stable `recommendation_id`, `action.action_id`, `risk`, `idempotency`, `basis`, and `expires_at`.
 4. Every action attempt MUST be followed by an update, even if execution failed before starting.
 5. Corrections, overrides, and redactions MUST be appended as new events. History MUST NOT be edited.
 6. Process exit codes signal protocol/tool failure, not goal or action success. Goal/action status is in JSON.
-7. The event log is canonical for visible protocol state. Private oracle state MAY exist, but an implementation MUST NOT require it to interpret history, validate open recommendations, or reconstruct status fields defined by this spec.
+7. The event log is canonical for visible protocol state. Private wayfinder state MAY exist, but an implementation MUST NOT require it to interpret history, validate open recommendations, or reconstruct status fields defined by this spec.
 8. Structured fields are authoritative. Human-readable prose fields MUST NOT change executor behavior.
-9. An external action MUST run at most once per `recommendation_id`/`action_id` pair. Retries happen only through oracle re-issuance of a new recommendation (§8.1).
+9. An external action MUST run at most once per `recommendation_id`/`action_id` pair. Retries happen only through wayfinder re-issuance of a new recommendation (§8.1).
 
 ## 0.2 v0.1 Core Surface
 
@@ -106,37 +106,37 @@ Implementations MAY advertise additional types or action kinds in `capabilities`
 
 # 1. Transport and CLI Contract
 
-The default transport is Unix CLI with JSON over stdin/stdout. v0.1 assumes the oracle and executor share one local filesystem and one oracle store (§6.0). Remote transports are out of scope for v0.1 except the optional JSON-RPC mode (§1.5).
+The default transport is Unix CLI with JSON over stdin/stdout. v0.1 assumes the wayfinder and executor share one local filesystem and one wayfinder store (§6.0). Remote transports are out of scope for v0.1 except the optional JSON-RPC mode (§1.5).
 
-## 1.1 Required Oracle Commands
+## 1.1 Required Wayfinder Commands
 
 ```bash
-oracle capabilities [--format=json]
-oracle goal create [--request-id REQ] [--format=json] < goal.json
-oracle status --goal-id GOAL [--request-id REQ] [--format=json]
-oracle next --goal-id GOAL --mode=preview|issue [--supersede] \
+wayfinder capabilities [--format=json]
+wayfinder goal create [--request-id REQ] [--format=json] < goal.json
+wayfinder status --goal-id GOAL [--request-id REQ] [--format=json]
+wayfinder next --goal-id GOAL --mode=preview|issue [--supersede] \
     [--explain=none|summary|structured|debug] [--request-id REQ] [--format=json]
-oracle update --goal-id GOAL [--request-id REQ] [--format=json] < update.json
-oracle history --goal-id GOAL --since-seq N [--limit M] [--format=jsonl]
-oracle explain --goal-id GOAL --recommendation-id REC [--request-id REQ] [--format=json]
+wayfinder update --goal-id GOAL [--request-id REQ] [--format=json] < update.json
+wayfinder history --goal-id GOAL --since-seq N [--limit M] [--format=jsonl]
+wayfinder explain --goal-id GOAL --recommendation-id REC [--request-id REQ] [--format=json]
 ```
 
 Optional command (SHOULD be implemented; advertised in `capabilities.features.verify`):
 
 ```bash
-oracle verify --goal-id GOAL [--format=json]
+wayfinder verify --goal-id GOAL [--format=json]
 ```
 
-`--format` defaults to `json` (`jsonl` for `oracle history`); the flag MAY be omitted. Implementations MUST support a `--request-id` flag on all non-history commands; its value is the protocol `request_id` (§1.3).
+`--format` defaults to `json` (`jsonl` for `wayfinder history`); the flag MAY be omitted. Implementations MUST support a `--request-id` flag on all non-history commands; its value is the protocol `request_id` (§1.3).
 
 ## 1.2 Output and Exit Rules
 
 - `stdout` MUST contain machine-readable JSON for every non-history command.
-- `oracle history` stdout MUST contain JSONL: one `oip.event/0.1` object per line, ordered by increasing `seq`.
+- `wayfinder history` stdout MUST contain JSONL: one `wip.event/0.1` object per line, ordered by increasing `seq`.
 - `stderr` is for human diagnostics only. Clients MUST ignore stderr for protocol state.
 - Exit `0` means the command completed and emitted a syntactically valid protocol response.
-- Nonzero exit means protocol/tool failure. For non-history commands, if stdout is non-empty on nonzero exit, it MUST be an `oip.error/0.1` object.
-- **History streaming exception:** if `oracle history` fails after streaming has begun, it MUST exit nonzero and MAY append a final line containing an `oip.error/0.1` object. Clients MUST verify the hash chain of received lines and MUST treat any nonzero exit as "history may be incomplete."
+- Nonzero exit means protocol/tool failure. For non-history commands, if stdout is non-empty on nonzero exit, it MUST be a `wip.error/0.1` object.
+- **History streaming exception:** if `wayfinder history` fails after streaming has begun, it MUST exit nonzero and MAY append a final line containing a `wip.error/0.1` object. Clients MUST verify the hash chain of received lines and MUST treat any nonzero exit as "history may be incomplete."
 - Goal failure, action failure, policy denial, and blocked status MUST be represented in JSON with exit `0` if the command itself completed.
 
 Recommended CLI exit codes (informative; clients MUST branch on the JSON `error.code`, not the exit code):
@@ -156,18 +156,18 @@ Recommended CLI exit codes (informative; clients MUST branch on the JSON `error.
 
 ## 1.3 Response Envelope
 
-Every successful non-history command MUST return an `oip.response/0.1` envelope. The command-specific result object MUST appear in `result`. A conforming v0.1 CLI MUST NOT emit raw success result objects. Error responses MUST emit an `oip.error/0.1` object directly and MUST NOT wrap the error in `oip.response/0.1`.
+Every successful non-history command MUST return a `wip.response/0.1` envelope. The command-specific result object MUST appear in `result`. A conforming v0.1 CLI MUST NOT emit raw success result objects. Error responses MUST emit a `wip.error/0.1` object directly and MUST NOT wrap the error in `wip.response/0.1`.
 
-If the caller provides a request ID via `--request-id` or a JSON-RPC request `id`, the oracle MUST copy it unchanged into the response or error object. If no request ID was provided, `request_id` MUST be omitted or `null`.
+If the caller provides a request ID via `--request-id` or a JSON-RPC request `id`, the wayfinder MUST copy it unchanged into the response or error object. If no request ID was provided, `request_id` MUST be omitted or `null`.
 
 Successful command envelope:
 
 ```json
 {
-  "schema": "oip.response/0.1",
+  "schema": "wip.response/0.1",
   "protocol_version": "0.1",
   "request_id": "req_01",
-  "command": "oracle.next",
+  "command": "wayfinder.next",
   "result": {}
 }
 ```
@@ -176,7 +176,7 @@ Error object:
 
 ```json
 {
-  "schema": "oip.error/0.1",
+  "schema": "wip.error/0.1",
   "protocol_version": "0.1",
   "request_id": "req_01",
   "error": {
@@ -208,47 +208,47 @@ internal_error
 
 ## 1.4 Command Results
 
-### `oracle capabilities`
+### `wayfinder capabilities`
 
-Result MUST be an `oip.capabilities/0.1` object. This command MUST work before any goal exists.
+Result MUST be a `wip.capabilities/0.1` object. This command MUST work before any goal exists.
 
-### `oracle goal create`
+### `wayfinder goal create`
 
-Input MUST be an `oip.goal_create/0.1` object. Goal creation MUST be idempotent by `create_id`. The oracle MUST persist, keyed by `create_id`, the SHA-256 of the canonical request bytes (§2) and the identity of the created goal. Re-submitting canonically byte-identical goal-create content with the same `create_id` MUST return the original goal and original `goal.created` event, the **current** status derived from the full log, and `"replayed": true`. Reusing `create_id` with different canonical content MUST fail with `invalid_input`. Result MUST include:
+Input MUST be a `wip.goal_create/0.1` object. Goal creation MUST be idempotent by `create_id`. The wayfinder MUST persist, keyed by `create_id`, the SHA-256 of the canonical request bytes (§2) and the identity of the created goal. Re-submitting canonically byte-identical goal-create content with the same `create_id` MUST return the original goal and original `goal.created` event, the **current** status derived from the full log, and `"replayed": true`. Reusing `create_id` with different canonical content MUST fail with `invalid_input`. Result MUST include:
 
 ```json
 {
-  "goal": { "schema": "oip.goal/0.1" },
-  "events": [{ "schema": "oip.event/0.1", "type": "goal.created" }],
-  "status": { "schema": "oip.status/0.1" },
+  "goal": { "schema": "wip.goal/0.1" },
+  "events": [{ "schema": "wip.event/0.1", "type": "goal.created" }],
+  "status": { "schema": "wip.status/0.1" },
   "replayed": false
 }
 ```
 
-### `oracle status`
+### `wayfinder status`
 
-`oracle status` MUST NOT append events. Its result MUST be an `oip.status/0.1` object.
+`wayfinder status` MUST NOT append events. Its result MUST be a `wip.status/0.1` object.
 
-### `oracle next --mode=preview`
+### `wayfinder next --mode=preview`
 
 MUST NOT append events, create executable leases, or allocate an executable recommendation. The returned recommendation MUST have `"executable": false`.
 
-### `oracle next --mode=issue`
+### `wayfinder next --mode=issue`
 
 MUST atomically append exactly one `recommendation.issued` event — preceded in the same atomic append by `recommendation.superseded` events when `--supersede` applies — and return the recommendation embedded in that event. If the returned recommendation has `recommendation_type:"action"`, it MUST have `"executable": true`; otherwise it MUST have `"executable": false`.
 
 If an open executable recommendation already exists for the goal:
 
 - Without `--supersede`, the command MUST fail with `storage_conflict` and append nothing.
-- With `--supersede`, the oracle MUST atomically append one `recommendation.superseded` event per open executable recommendation, followed by the new `recommendation.issued` event, in one append operation (§6.5). The new recommendation's `supersedes` array MUST list exactly the recommendation IDs superseded in that operation.
+- With `--supersede`, the wayfinder MUST atomically append one `recommendation.superseded` event per open executable recommendation, followed by the new `recommendation.issued` event, in one append operation (§6.5). The new recommendation's `supersedes` array MUST list exactly the recommendation IDs superseded in that operation.
 
-`oracle next --mode=issue` MUST be atomic with respect to the event log head. If another writer changes the head during issuance, the command MUST retry against the new head or fail with `storage_conflict`.
+`wayfinder next --mode=issue` MUST be atomic with respect to the event log head. If another writer changes the head during issuance, the command MUST retry against the new head or fail with `storage_conflict`.
 
-If the goal is in a terminal state (`succeeded`, `failed`, `cancelled`), `oracle next` MUST fail with `invalid_input`.
+If the goal is in a terminal state (`succeeded`, `failed`, `cancelled`), `wayfinder next` MUST fail with `invalid_input`.
 
-### `oracle update`
+### `wayfinder update`
 
-MUST be idempotent by `update_id`. The oracle MUST persist, keyed by `update_id`, the SHA-256 of the canonical update bytes and the appended seq range. Re-submitting canonically byte-identical update content with the same `update_id` MUST return the originally appended events (`appended_events`, `seq_start`, `seq_end` unchanged), the **current** status and `event_log_head`, and `"replayed": true`; it MUST NOT append new events. Reusing `update_id` with different canonical content MUST fail with `invalid_input`.
+MUST be idempotent by `update_id`. The wayfinder MUST persist, keyed by `update_id`, the SHA-256 of the canonical update bytes and the appended seq range. Re-submitting canonically byte-identical update content with the same `update_id` MUST return the originally appended events (`appended_events`, `seq_start`, `seq_end` unchanged), the **current** status and `event_log_head`, and `"replayed": true`; it MUST NOT append new events. Reusing `update_id` with different canonical content MUST fail with `invalid_input`.
 
 If `--goal-id` and the update body's `goal_id` are both present and differ, the command MUST fail with `invalid_input`.
 
@@ -257,26 +257,26 @@ Result MUST include:
 ```json
 {
   "update_id": "upd_01",
-  "appended_events": [{ "schema": "oip.event/0.1" }],
+  "appended_events": [{ "schema": "wip.event/0.1" }],
   "seq_start": 21,
   "seq_end": 21,
   "event_log_head": "sha256:...",
-  "status": { "schema": "oip.status/0.1" },
+  "status": { "schema": "wip.status/0.1" },
   "replayed": false
 }
 ```
 
-### `oracle history`
+### `wayfinder history`
 
-`oracle history --since-seq N` MUST return events with `seq > N`. Use `--since-seq 0` to read from the beginning. `--limit M` caps the number of returned lines; if the result is truncated by `--limit`, the client resumes with `--since-seq` set to the last received `seq`. Events MUST be emitted verbatim as stored (byte-for-byte lines); re-serialization would break hash verification by readers.
+`wayfinder history --since-seq N` MUST return events with `seq > N`. Use `--since-seq 0` to read from the beginning. `--limit M` caps the number of returned lines; if the result is truncated by `--limit`, the client resumes with `--since-seq` set to the last received `seq`. Events MUST be emitted verbatim as stored (byte-for-byte lines); re-serialization would break hash verification by readers.
 
-### `oracle explain`
+### `wayfinder explain`
 
-MUST return an `oip.explanation/0.1` result for a known issued recommendation in history:
+MUST return a `wip.explanation/0.1` result for a known issued recommendation in history:
 
 ```json
 {
-  "schema": "oip.explanation/0.1",
+  "schema": "wip.explanation/0.1",
   "protocol_version": "0.1",
   "goal_id": "goal_01",
   "recommendation_id": "rec_01",
@@ -289,15 +289,15 @@ MUST return an `oip.explanation/0.1` result for a known issued recommendation in
 }
 ```
 
-It MUST fail with `invalid_input` for unknown IDs and for preview-only recommendation IDs. Preview explanations are addressable only inline in the `oracle next --mode=preview` response.
+It MUST fail with `invalid_input` for unknown IDs and for preview-only recommendation IDs. Preview explanations are addressable only inline in the `wayfinder next --mode=preview` response.
 
-### `oracle verify` (optional)
+### `wayfinder verify` (optional)
 
 Verifies the goal's hash chain and, when feasible, artifact digests. Result MUST be:
 
 ```json
 {
-  "schema": "oip.verify/0.1",
+  "schema": "wip.verify/0.1",
   "protocol_version": "0.1",
   "goal_id": "goal_01",
   "ok": true,
@@ -311,40 +311,40 @@ Verifies the goal's hash chain and, when feasible, artifact digests. Result MUST
 
 ## 1.5 Optional JSON-RPC Mode
 
-A long-running oracle MAY expose equivalent methods over JSON-RPC 2.0. If it does, method parameters and results MUST be equivalent to the CLI command contracts above.
+A long-running wayfinder MAY expose equivalent methods over JSON-RPC 2.0. If it does, method parameters and results MUST be equivalent to the CLI command contracts above.
 
 Required method names for JSON-RPC implementations:
 
 ```text
 initialize
-oracle.capabilities
+wayfinder.capabilities
 goal.create
 goal.status
-oracle.next
-oracle.update
+wayfinder.next
+wayfinder.update
 goal.history
-oracle.explain
+wayfinder.explain
 shutdown
 ```
 
 Rules:
 
 - JSON-RPC request `id` is the protocol `request_id`.
-- JSON-RPC success `result` MUST be the same command-specific result object that would appear in the CLI `oip.response/0.1.result` field. JSON-RPC MUST NOT nest an `oip.response/0.1` envelope inside `result`.
-- `initialize` params: `{ "protocol_version": "0.1", "client": { "name": string, "version": string } }`. Result: the server's `oip.capabilities/0.1` object. `initialize` MUST be the first call on a connection.
+- JSON-RPC success `result` MUST be the same command-specific result object that would appear in the CLI `wip.response/0.1.result` field. JSON-RPC MUST NOT nest a `wip.response/0.1` envelope inside `result`.
+- `initialize` params: `{ "protocol_version": "0.1", "client": { "name": string, "version": string } }`. Result: the server's `wip.capabilities/0.1` object. `initialize` MUST be the first call on a connection.
 - `shutdown` takes no params and returns `null`.
 - `goal.history` params: `{ "goal_id": string, "since_seq": integer, "limit": integer? }`. Result:
 
 ```json
 {
-  "events": [{ "schema": "oip.event/0.1" }],
+  "events": [{ "schema": "wip.event/0.1" }],
   "truncated": false,
   "next_since_seq": null
 }
 ```
 
   `truncated: true` means more events exist; the client continues from `next_since_seq`. Page size is bounded by `capabilities.limits.max_history_events_per_page`.
-- Protocol failures MUST use JSON-RPC error code `-32000` with a complete `oip.error/0.1` object in `error.data`. The standard codes `-32700`, `-32600`, `-32601`, and `-32602` retain their JSON-RPC meanings for transport-level failures.
+- Protocol failures MUST use JSON-RPC error code `-32000` with a complete `wip.error/0.1` object in `error.data`. The standard codes `-32700`, `-32600`, `-32601`, and `-32602` retain their JSON-RPC meanings for transport-level failures.
 - Batch requests and server-initiated notifications are not part of v0.1.
 - Cancellation is optional; support is advertised in `capabilities.features.cancellation`.
 
@@ -352,12 +352,12 @@ Rules:
 
 # 2. IDs, Timestamps, and Common Types
 
-IDs are opaque strings. Prefixes are recommended but not semantically required. `event_id` MUST be unique within its goal's event log; all other IDs MUST be unique within the oracle store.
+IDs are opaque strings. Prefixes are recommended but not semantically required. `event_id` MUST be unique within its goal's event log; all other IDs MUST be unique within the wayfinder store.
 
 ```text
 goal_...   goal identity
 run_...    RESERVED in v0.1 (no run concept)
-rec_...    oracle recommendation
+rec_...    wayfinder recommendation
 lease_...  executable recommendation lease
 act_...    executable or manual action
 upd_...    submitted update
@@ -366,9 +366,9 @@ art_...    artifact reference
 req_...    command or RPC request
 ```
 
-Timestamps MUST be RFC 3339 UTC strings. Timestamps inside submitted payloads are preserved verbatim by the oracle; the event envelope `time` field is assigned by the appender at append time.
+Timestamps MUST be RFC 3339 UTC strings. Timestamps inside submitted payloads are preserved verbatim by the wayfinder; the event envelope `time` field is assigned by the appender at append time.
 
-**Clock authority.** The oracle's clock is authoritative for evaluating `expires_at`, `lease.lease_expires_at`, and expiry dispositions at the moment an update or issuance is processed. Executors SHOULD apply a local safety margin (e.g., refuse to start actions within a few seconds of expiry) to tolerate skew.
+**Clock authority.** The wayfinder's clock is authoritative for evaluating `expires_at`, `lease.lease_expires_at`, and expiry dispositions at the moment an update or issuance is processed. Executors SHOULD apply a local safety margin (e.g., refuse to start actions within a few seconds of expiry) to tolerate skew.
 
 When this specification says canonically byte-identical content, it means the object serialized with RFC 8785 JSON canonicalization after removing the transport-only field `request_id` (and no other field). Implementations MUST compare the canonical bytes, not pretty-printed input bytes.
 
@@ -387,19 +387,19 @@ When this specification says canonically byte-identical content, it means the ob
 ```
 
 Required fields: `type`, `id`, `authority`. Optional fields: `display_name`, `authenticated`.
-Allowed `type`: `human`, `executor`, `oracle`, `system` (`system` denotes an automated non-executor process such as a scheduler or migration tool).
+Allowed `type`: `human`, `executor`, `wayfinder`, `system` (`system` denotes an automated non-executor process such as a scheduler or migration tool).
 Allowed `authority`: `observer`, `operator`, `owner`, `policy_admin`.
 
-Authority is only meaningful inside the local trust domain. `authenticated: true` MUST be derived by the oracle from a local authentication mechanism (e.g., OS user identity of the submitting process); it MUST NOT be trusted merely because the submitted JSON asserts it. If the implementation cannot authenticate the actor, it MUST record `authenticated: false` or omit the field; policy MUST NOT treat unauthenticated authority as sufficient for privileged actions.
+Authority is only meaningful inside the local trust domain. `authenticated: true` MUST be derived by the wayfinder from a local authentication mechanism (e.g., OS user identity of the submitting process); it MUST NOT be trusted merely because the submitted JSON asserts it. If the implementation cannot authenticate the actor, it MUST record `authenticated: false` or omit the field; policy MUST NOT treat unauthenticated authority as sufficient for privileged actions.
 
 ## 2.2 Artifact Reference
 
 ```json
 {
-  "schema": "oip.artifact/0.1",
+  "schema": "wip.artifact/0.1",
   "protocol_version": "0.1",
   "artifact_id": "art_01",
-  "uri": "file:.oracle/goals/goal_01/artifacts/sha256/ab/abc123...",
+  "uri": "file:.wayfinder/goals/goal_01/artifacts/sha256/ab/abc123...",
   "media_type": "text/plain",
   "sha256": "sha256:abc123...",
   "bytes": 15322,
@@ -414,9 +414,9 @@ Required fields: `schema`, `protocol_version`, `artifact_id`, `uri`, `media_type
 
 When `redacted: true`, `redaction` MUST be an object `{ "reason": string, "redacted_by": actor? }`; otherwise `redaction` MUST be `null` or absent.
 
-**URI resolution.** A `file:` artifact URI with a relative path (e.g., `file:.oracle/...`) MUST be resolved against the goal workspace root (the directory that contains the `.oracle` store, §6.0) and MUST resolve inside `.oracle/goals/{goal_id}/artifacts/`. Absolute `file:` URIs are rejected unless local policy explicitly allows them. Implementations MUST normalize artifact paths, reject `..` segments, and reject paths that escape the artifact root after resolving symlinks.
+**URI resolution.** A `file:` artifact URI with a relative path (e.g., `file:.wayfinder/...`) MUST be resolved against the goal workspace root (the directory that contains the `.wayfinder` store, §6.0) and MUST resolve inside `.wayfinder/goals/{goal_id}/artifacts/`. Absolute `file:` URIs are rejected unless local policy explicitly allows them. Implementations MUST normalize artifact paths, reject `..` segments, and reject paths that escape the artifact root after resolving symlinks.
 
-**Content addressing and write protocol.** Artifacts MUST be content-addressed by post-redaction bytes at `artifacts/sha256/{first-2-hex}/{full-hex}`. `bytes` is the byte count of stored bytes. A writer MUST write artifact content to a temporary file on the same filesystem, fsync it, verify the digest, then atomically rename it to its content address. Content-addressed writes require no lock: an existing file whose digest matches satisfies the write. An event that references an artifact MUST NOT be appended until the artifact file is durable. Executors MUST verify the digest before submitting an artifact reference, and oracles MUST verify it before appending an event that references the artifact.
+**Content addressing and write protocol.** Artifacts MUST be content-addressed by post-redaction bytes at `artifacts/sha256/{first-2-hex}/{full-hex}`. `bytes` is the byte count of stored bytes. A writer MUST write artifact content to a temporary file on the same filesystem, fsync it, verify the digest, then atomically rename it to its content address. Content-addressed writes require no lock: an existing file whose digest matches satisfies the write. An event that references an artifact MUST NOT be appended until the artifact file is durable. Executors MUST verify the digest before submitting an artifact reference, and wayfinders MUST verify it before appending an event that references the artifact.
 
 If captured output exceeds `capabilities.limits.max_artifact_bytes`, the executor MUST truncate it (keeping at least the head; SHOULD keep head and tail), store the truncated bytes, and set `truncated: true`.
 
@@ -424,11 +424,11 @@ If captured output exceeds `capabilities.limits.max_artifact_bytes`, the executo
 
 # 3. Goal Schema
 
-`oracle goal create` input:
+`wayfinder goal create` input:
 
 ```json
 {
-  "schema": "oip.goal_create/0.1",
+  "schema": "wip.goal_create/0.1",
   "protocol_version": "0.1",
   "create_id": "create_01",
   "created_at": "2026-07-04T18:00:00Z",
@@ -450,7 +450,7 @@ Created goal:
 
 ```json
 {
-  "schema": "oip.goal/0.1",
+  "schema": "wip.goal/0.1",
   "protocol_version": "0.1",
   "goal_id": "goal_01",
   "created_at": "2026-07-04T18:00:00Z",
@@ -469,9 +469,9 @@ Created goal:
 }
 ```
 
-Required `oip.goal_create/0.1` fields: `schema`, `protocol_version`, `create_id`, `created_at`, `actor`, `description`, `workspace_uri`. Optional: `policy`, `metadata`. `create_id` is an opaque idempotency key for the goal creation request and MUST be unique within the oracle storage domain.
+Required `wip.goal_create/0.1` fields: `schema`, `protocol_version`, `create_id`, `created_at`, `actor`, `description`, `workspace_uri`. Optional: `policy`, `metadata`. `create_id` is an opaque idempotency key for the goal creation request and MUST be unique within the wayfinder storage domain.
 
-`workspace_uri` MUST be an absolute `file:` URI. The oracle MUST fail with `invalid_input` if the directory does not exist at creation time.
+`workspace_uri` MUST be an absolute `file:` URI. The wayfinder MUST fail with `invalid_input` if the directory does not exist at creation time.
 
 The only `policy` key defined in v0.1 is `max_auto_risk_level`, whose value MUST be a §8.2 risk level. Unknown policy keys MUST be rejected with `invalid_input` unless namespaced (`{namespace}.{key}`) and advertised. The created goal MUST echo the accepted `policy`.
 
@@ -481,13 +481,13 @@ Allowed `goal_status` values for a goal: `pending`, `running`, `waiting`, `block
 
 # 4. Recommendation Schema
 
-A recommendation is the oracle's answer to "what next?"
+A recommendation is the wayfinder's answer to "what next?"
 
 The example below is issued as event `seq=18`; its `basis` records the pre-issuance log position (`seq=17`).
 
 ```json
 {
-  "schema": "oip.recommendation/0.1",
+  "schema": "wip.recommendation/0.1",
   "protocol_version": "0.1",
   "goal_id": "goal_01",
   "recommendation_id": "rec_01",
@@ -499,15 +499,15 @@ The example below is issued as event `seq=18`; its `basis` records the pre-issua
     "lease_id": "lease_01",
     "lease_expires_at": "2026-07-04T18:32:11Z"
   },
-  "oracle": {
-    "name": "local-oracle",
+  "wayfinder": {
+    "name": "local-wayfinder",
     "version": "0.3.0",
-    "instance_id": "oracle_host_abc"
+    "instance_id": "wayfinder_host_abc"
   },
   "basis": {
     "event_log_seq": 17,
     "event_log_head": "sha256:head17...",
-    "state_version": "opaque-oracle-state-version"
+    "state_version": "opaque-wayfinder-state-version"
   },
   "recommendation_type": "action",
   "summary": "Run the project test suite.",
@@ -587,9 +587,9 @@ The example below is issued as event `seq=18`; its `basis` records the pre-issua
 
 For `recommendation_type: "action"`, the fields `action`, `risk`, `idempotency`, `basis`, and `expires_at` are required. For `done`, `blocked`, `unsafe`, `question`, and `wait`, `action` MUST be absent, and the payload object named after the type MUST be present (§4.1).
 
-All recommendations MUST include `schema`, `protocol_version`, `goal_id`, `recommendation_id`, `issued_at`, `executable`, `oracle`, `basis`, `recommendation_type`, `summary`, `goal_status`, and `confidence`. Issued executable recommendations MUST include `lease`; `lease.lease_expires_at` MUST NOT be later than `expires_at`. Preview recommendations MUST set `executable:false`, MUST omit `lease`, and MUST NOT reserve the `recommendation_id` for later execution.
+All recommendations MUST include `schema`, `protocol_version`, `goal_id`, `recommendation_id`, `issued_at`, `executable`, `wayfinder`, `basis`, `recommendation_type`, `summary`, `goal_status`, and `confidence`. Issued executable recommendations MUST include `lease`; `lease.lease_expires_at` MUST NOT be later than `expires_at`. Preview recommendations MUST set `executable:false`, MUST omit `lease`, and MUST NOT reserve the `recommendation_id` for later execution.
 
-`basis.event_log_seq` and `basis.event_log_head` record the log position the oracle reasoned from — the head **before** the `recommendation.issued` event. They are provenance for the oracle's decision. They are NOT the executor's freshness anchor and NOT the values used in update `issued_event_seq`/`issued_event_hash` (§4.2, §5).
+`basis.event_log_seq` and `basis.event_log_head` record the log position the wayfinder reasoned from — the head **before** the `recommendation.issued` event. They are provenance for the wayfinder's decision. They are NOT the executor's freshness anchor and NOT the values used in update `issued_event_seq`/`issued_event_hash` (§4.2, §5).
 
 v0.1 does not support parallel executable recommendations. `parallel` MUST be `false` or absent; validators MUST reject `parallel: true`. `supersedes` MUST be an array of recommendation IDs listing exactly the recommendations superseded in the same atomic issuance (§1.4); it MUST be empty otherwise.
 
@@ -599,9 +599,9 @@ v0.1 does not support parallel executable recommendations. `parallel` MUST be `f
 action      executor may execute one structured action
 question    ask human for missing information
 wait        do not execute; re-query after time
-blocked     oracle cannot suggest progress without external change
-done        oracle believes the goal is complete
-unsafe      oracle refuses to suggest because all known next steps violate policy
+blocked     wayfinder cannot suggest progress without external change
+done        wayfinder believes the goal is complete
+unsafe      wayfinder refuses to suggest because all known next steps violate policy
 ```
 
 Each non-action type carries its payload in an object named after the type:
@@ -630,11 +630,11 @@ An issued recommendation is executable by a prospective executor only if all con
 6. No `recommendation.superseded` event targets it.
 7. **Claim.** No `recommendation.accepted` or `action.started` event exists for the same `recommendation_id` whose `actor.id` differs from the prospective executor's `actor.id`. The first accepting actor claims the lease.
 
-If any condition fails, the executor MUST NOT execute the action, and the oracle MUST reject execution-initiating updates (`recommendation_disposition=accepted`, `action_started`) with `stale_recommendation` — except as provided by the terminal-result rule below. The oracle MUST reject an `action_started` or `accepted` update for a recommendation already claimed by a different `actor.id` with `storage_conflict`.
+If any condition fails, the executor MUST NOT execute the action, and the wayfinder MUST reject execution-initiating updates (`recommendation_disposition=accepted`, `action_started`) with `stale_recommendation` — except as provided by the terminal-result rule below. The wayfinder MUST reject an `action_started` or `accepted` update for a recommendation already claimed by a different `actor.id` with `storage_conflict`.
 
 **Lifecycle events do not self-invalidate.** `recommendation.accepted`, `action.started`, and `action.output_recorded` events MUST be appended with explicit `invalidates_open_recommendations: false`.
 
-**Terminal-result acceptance rule.** Once an `action.started` event exists for a `recommendation_id`/`action_id`, the oracle MUST accept a well-formed terminal `action_result` update from the same actor for that pair — regardless of any events appended after `action.started` — unless a terminal action event for the pair already exists. An action that has externally run must always be able to record its outcome.
+**Terminal-result acceptance rule.** Once an `action.started` event exists for a `recommendation_id`/`action_id`, the wayfinder MUST accept a well-formed terminal `action_result` update from the same actor for that pair — regardless of any events appended after `action.started` — unless a terminal action event for the pair already exists. An action that has externally run must always be able to record its outcome.
 
 ## 4.3 Action Kinds
 
@@ -678,7 +678,7 @@ Under the default policy, `env.mode: "inherit"` requires approval (§8.3): the e
 
 Environment entries in `set` MUST be objects, either `{ "value": string, "sensitive": false }` or `{ "secret_ref": string, "sensitive": true }`. An event log MUST NOT contain an environment entry with both `sensitive:true` and `value`. Executors MUST resolve `secret_ref` only through local policy-approved secret stores.
 
-`stdin.mode` MUST be one of `none`, `inline`, or `artifact`. If `inline`, `stdin.text` MUST be present and MUST NOT exceed `capabilities.limits.max_inline_stdin_bytes` unless local policy explicitly allows it. `stdin.text` MUST NOT contain secret material: it is embedded in the immutable event log via the `recommendation.issued` event and cannot be truly redacted. Secret-bearing stdin MUST use `stdin.artifact` (with an access-controlled artifact) or a future `secret_ref` mechanism. If `artifact`, `stdin.artifact` MUST be an `oip.artifact/0.1` reference.
+`stdin.mode` MUST be one of `none`, `inline`, or `artifact`. If `inline`, `stdin.text` MUST be present and MUST NOT exceed `capabilities.limits.max_inline_stdin_bytes` unless local policy explicitly allows it. `stdin.text` MUST NOT contain secret material: it is embedded in the immutable event log via the `recommendation.issued` event and cannot be truly redacted. Secret-bearing stdin MUST use `stdin.artifact` (with an access-controlled artifact) or a future `secret_ref` mechanism. If `artifact`, `stdin.artifact` MUST be a `wip.artifact/0.1` reference.
 
 `pty` is RESERVED in v0.1: it MUST be `false`, and executors MUST reject `pty: true`.
 
@@ -732,13 +732,13 @@ If `success_criteria` is absent for a shell action, it defaults to exit code in 
 
 # 5. Update and Observation Schema
 
-An update is any new information submitted to the oracle.
+An update is any new information submitted to the wayfinder.
 
 The example below reports the failure of the action issued as event `seq=18` in §4; `issued_event_seq`/`issued_event_hash` identify that `recommendation.issued` event.
 
 ```json
 {
-  "schema": "oip.update/0.1",
+  "schema": "wip.update/0.1",
   "protocol_version": "0.1",
   "update_id": "upd_01",
   "goal_id": "goal_01",
@@ -800,7 +800,7 @@ If an update refers to a recommendation, it MUST include `recommendation_id`; if
 
 Required `action_result` fields: `status`, `changed`, `started_at`, `ended_at`. `process` is required for shell actions. `output`, `duration_ms`, `criteria`, `artifacts`, `observations`, and `error` are optional.
 
-Exactly one payload object matching `update_type` MUST be present, with one exception: an update MAY combine `recommendation_disposition` with an `action_started` or `action_result` payload when it intentionally combines disposition and result. In that case the oracle MUST append the disposition event before the action event in the same atomic append operation. If any event in the operation cannot be appended, no event from that update may be appended.
+Exactly one payload object matching `update_type` MUST be present, with one exception: an update MAY combine `recommendation_disposition` with an `action_started` or `action_result` payload when it intentionally combines disposition and result. In that case the wayfinder MUST append the disposition event before the action event in the same atomic append operation. If any event in the operation cannot be appended, no event from that update may be appended.
 
 ## 5.1 Update Types
 
@@ -838,7 +838,7 @@ goal_cancel                                  goal_cancel object with reason; rea
 
 An `observation` update MAY set a top-level `invalidates_open_recommendations: false` to mark itself informational; the resulting `observation.recorded` event carries that explicit value instead of the default.
 
-**Authority requirements.** `goal_cancel` and `override` decisions `mark_done` and `mark_failed` require an authenticated actor with authority `owner` or `policy_admin`. Other `override` decisions require authority `operator` or higher. The oracle MUST reject updates that do not meet these requirements with `policy_denied`.
+**Authority requirements.** `goal_cancel` and `override` decisions `mark_done` and `mark_failed` require an authenticated actor with authority `owner` or `policy_admin`. Other `override` decisions require authority `operator` or higher. The wayfinder MUST reject updates that do not meet these requirements with `policy_denied`.
 
 ## 5.2 Disposition Values
 
@@ -849,7 +849,7 @@ skipped
 expired
 ```
 
-(`overridden` was removed: overrides use `update_type=override`.) An `expired` disposition MAY be submitted by any actor; the oracle MUST verify against its own clock that the recommendation's `expires_at` or `lease.lease_expires_at` has passed, and MUST reject the update with `invalid_input` otherwise.
+(`overridden` was removed: overrides use `update_type=override`.) An `expired` disposition MAY be submitted by any actor; the wayfinder MUST verify against its own clock that the recommendation's `expires_at` or `lease.lease_expires_at` has passed, and MUST reject the update with `invalid_input` otherwise.
 
 ## 5.3 Action Result Status
 
@@ -871,8 +871,8 @@ Observation objects MUST be one of the following kinds, with these required fiel
 ```text
 fact         subject, predicate, object            (+ optional confidence, source, evidence)
 diagnostic   statement                             (+ optional confidence, evidence)
-artifact     artifact (oip.artifact/0.1 reference) (+ optional description)
-message      text                                  (+ optional audience: "human"|"oracle")
+artifact     artifact (wip.artifact/0.1 reference) (+ optional description)
+message      text                                  (+ optional audience: "human"|"wayfinder")
 ```
 
 Fact example:
@@ -907,12 +907,12 @@ The event log is append-only JSONL and is canonical for visible protocol state.
 
 ## 6.0 Store Resolution
 
-The oracle store root defaults to `.oracle/` directly under the goal workspace root. Implementations MAY support overriding it via an `ORACLE_STORE` environment variable or a `--store` flag; all cooperating processes (oracle CLI invocations, executors, verifiers) MUST resolve the same store, and v0.1 assumes they share one local filesystem.
+The wayfinder store root defaults to `.wayfinder/` directly under the goal workspace root. Implementations MAY support overriding it via a `WAYFINDER_STORE` environment variable or a `--store` flag; all cooperating processes (wayfinder CLI invocations, executors, verifiers) MUST resolve the same store, and v0.1 assumes they share one local filesystem.
 
 Default local layout:
 
 ```text
-.oracle/
+.wayfinder/
   goals/
     goal_01/
       events.ndjson
@@ -932,7 +932,7 @@ Artifact files SHOULD be created with mode `0600` and directories with mode `070
 
 ```json
 {
-  "schema": "oip.event/0.1",
+  "schema": "wip.event/0.1",
   "protocol_version": "0.1",
   "event_id": "evt_00000021",
   "type": "action.failed",
@@ -1002,11 +1002,11 @@ executor.heartbeat
 executor.policy_denied
 ```
 
-The event type names `goal.updated`, `question.asked`, and `oracle.status.reported` are RESERVED in v0.1: conforming implementations MUST NOT emit them, and a reducer encountering them MUST fail per §7.5. Status reads MUST NOT pollute event history.
+The event type names `goal.updated`, `question.asked`, and `wayfinder.status.reported` are RESERVED in v0.1: conforming implementations MUST NOT emit them, and a reducer encountering them MUST fail per §7.5. Status reads MUST NOT pollute event history.
 
 ## 6.3 Update-to-Event Mapping
 
-`oracle update` MUST apply this deterministic mapping:
+`wayfinder update` MUST apply this deterministic mapping:
 
 | Update | Event(s) |
 |---|---|
@@ -1040,9 +1040,9 @@ The event type names `goal.updated`, `question.asked`, and `oracle.status.report
 | `policy_denied` | `executor.policy_denied` |
 | `goal_cancel` | `goal.cancelled` |
 
-If an update contains artifact references, the oracle MUST verify artifact integrity before appending events. It MAY append `action.output_recorded` events before the terminal action event. If verification fails, no event from that update may be appended.
+If an update contains artifact references, the wayfinder MUST verify artifact integrity before appending events. It MAY append `action.output_recorded` events before the terminal action event. If verification fails, no event from that update may be appended.
 
-For any update that refers to a `recommendation_id` and `action_id`, the oracle MUST reject a second terminal action event for the same pair unless the submitted update is an idempotent replay of the original `update_id`. Terminal action events are `action.completed`, `action.failed`, `action.timed_out`, `action.cancelled`, `action.blocked`, and `action.skipped`.
+For any update that refers to a `recommendation_id` and `action_id`, the wayfinder MUST reject a second terminal action event for the same pair unless the submitted update is an idempotent replay of the original `update_id`. Terminal action events are `action.completed`, `action.failed`, `action.timed_out`, `action.cancelled`, `action.blocked`, and `action.skipped`.
 
 Default `invalidates_open_recommendations` values (applied by readers when the field is absent):
 
@@ -1105,13 +1105,13 @@ executor.heartbeat           { heartbeat }
 executor.policy_denied       { recommendation_id?, action_id?, policy_denied }
 ```
 
-`recommendation.issued.data.recommendation` MUST contain the exact `oip.recommendation/0.1` returned to the caller. Action terminal events MUST contain the exact accepted `action_result` payload, after artifact verification and redaction.
+`recommendation.issued.data.recommendation` MUST contain the exact `wip.recommendation/0.1` returned to the caller. Action terminal events MUST contain the exact accepted `action_result` payload, after artifact verification and redaction.
 
 ## 6.5 Append, Locking, and Recovery
 
 - Writers MUST acquire the per-goal append lock before reading the current head for append.
-- The lock path is `.oracle/goals/{goal_id}/locks/append.lock`.
-- **Lock primitive.** The lock is acquired by creating `append.lock` with `O_CREAT|O_EXCL` (or the platform equivalent, e.g., `CREATE_NEW` on Windows) and writing a JSON body `{ "holder": string, "pid": integer, "acquired_at": rfc3339, "expires_at": rfc3339 }`, then released by unlinking the file. A lock whose `expires_at` has passed MAY be broken by unlinking it and retrying acquisition. If the lock body cannot be parsed, implementations MUST NOT break the lock and MUST fail with `storage_conflict`. A single-process oracle daemon MAY substitute internal locking only if it exclusively owns the store directory.
+- The lock path is `.wayfinder/goals/{goal_id}/locks/append.lock`.
+- **Lock primitive.** The lock is acquired by creating `append.lock` with `O_CREAT|O_EXCL` (or the platform equivalent, e.g., `CREATE_NEW` on Windows) and writing a JSON body `{ "holder": string, "pid": integer, "acquired_at": rfc3339, "expires_at": rfc3339 }`, then released by unlinking the file. A lock whose `expires_at` has passed MAY be broken by unlinking it and retrying acquisition. If the lock body cannot be parsed, implementations MUST NOT break the lock and MUST fail with `storage_conflict`. A single-process wayfinder daemon MAY substitute internal locking only if it exclusively owns the store directory.
 - An append operation MUST write complete UTF-8 JSON lines ending in LF and MUST fsync the event file or containing directory when the platform exposes that operation.
 - Artifacts referenced by an event MUST be durable (written, fsynced, digest-verified) before the event is appended.
 - A partial final line or hash mismatch makes the log corrupt. Implementations MUST NOT append to a corrupt log except through explicit repair. The only sanctioned v0.1 repair is out-of-band tooling that, after backing up the file, truncates a **partial final line only**. Hash-mismatch corruption MUST NOT be auto-repaired.
@@ -1143,7 +1143,7 @@ Snapshot schema:
 
 ```json
 {
-  "schema": "oip.snapshot/0.1",
+  "schema": "wip.snapshot/0.1",
   "protocol_version": "0.1",
   "goal_id": "goal_01",
   "seq": 50,
@@ -1155,7 +1155,7 @@ Snapshot schema:
 
 Snapshot files are named by zero-padded `seq` (`snapshots/00000050.json`). A snapshot is valid only if its `event_log_head` equals the `event_hash` of the event at its `seq`. Replaying from a snapshot plus later events MUST reconstruct the same visible status as replaying from event 1.
 
-Snapshot `state` is implementation-private in v0.1. A conforming implementation MUST be able to ignore all snapshots and reconstruct visible state from events alone. `oracle status` MAY serve reads from a validated snapshot plus the event suffix.
+Snapshot `state` is implementation-private in v0.1. A conforming implementation MUST be able to ignore all snapshots and reconstruct visible state from events alone. `wayfinder status` MAY serve reads from a validated snapshot plus the event suffix.
 
 Events include their own `protocol_version`. A reader encountering an event whose `protocol_version` is newer than any version it supports MUST fail with `unsupported_capability`. Future migrations MUST be represented as appended events or out-of-band tooling that preserves the original log.
 
@@ -1202,7 +1202,7 @@ timeout
 nonzero_exit
 success_criteria_failed
 external_system_unavailable
-oracle_uncertain
+wayfinder_uncertain
 corrupt_event_log
 artifact_integrity_failed
 unsupported_override
@@ -1223,7 +1223,7 @@ The example reflects the §4–§6 timeline after `action.failed seq=21`: the te
 
 ```json
 {
-  "schema": "oip.status/0.1",
+  "schema": "wip.status/0.1",
   "protocol_version": "0.1",
   "goal_id": "goal_01",
   "run_id": null,
@@ -1258,7 +1258,7 @@ Allowed `needs.kind`: `user_input`, `approval`, `capability`, `dependency`, `cre
 
 ## 7.5 Required Status Replay
 
-`oracle status` and any conforming replayer MUST derive visible status by applying events in increasing `seq` order and verifying the hash chain first.
+`wayfinder status` and any conforming replayer MUST derive visible status by applying events in increasing `seq` order and verifying the hash chain first.
 
 Replay MUST be deterministic: the reducer MUST NOT consult wall-clock time. In particular, a recommendation past its `expires_at` remains `open_recommendation_id` until an event (`recommendation.expired`, `recommendation.rejected`, `recommendation.overridden`, `recommendation.superseded`, or a terminal action event) clears it; §4.2 condition 4 separately prevents its execution.
 
@@ -1273,7 +1273,7 @@ Minimum reducer rules:
 7. An issued `question` recommendation sets `goal_status:"waiting"` and `reason_code:"needs_user_input"`.
 8. `executor.policy_denied` sets `goal_status:"blocked"` and `reason_code:"policy_denied"` unless the current goal status is terminal.
 9. `recommendation.overridden` with `data.override.decision="mark_blocked"` sets `goal_status:"blocked"` and `reason_code` to `data.override.reason_code` when present, otherwise `null`.
-10. `correction.recorded`, `observation.recorded`, and `question.answered` do not by themselves determine terminal status; they may invalidate open recommendations according to their effective event flag. Correction content is input to oracle reasoning, not to this reducer.
+10. `correction.recorded`, `observation.recorded`, and `question.answered` do not by themselves determine terminal status; they may invalidate open recommendations according to their effective event flag. Correction content is input to wayfinder reasoning, not to this reducer.
 11. `goal.completed` sets `goal_status` to `data.terminal_status` and clears `open_recommendation_id`.
 12. `goal.cancelled` sets `goal_status:"cancelled"` and clears `open_recommendation_id`.
 
@@ -1316,7 +1316,7 @@ Allowed `partial_failure_recovery`: `retry`, `reconcile`, `rollback`, `manual`, 
 
 `precheck.description` and `postcheck.description` are advisory prose (invariant 8): a dumb executor MUST NOT act on them.
 
-**Retry model.** v0.1 has no in-executor retry. An executor MUST NOT re-execute an action for which any terminal action event exists (invariant 9); a failed action can only be retried by the oracle issuing a **new** recommendation with a new `recommendation_id` and `action_id`. `idempotency.max_attempts` bounds the total number of issuances of equivalent actions (same `idempotency.key`); `safe_to_retry` governs whether the oracle may re-issue after failure and whether interruption recovery may re-execute (§11.3). If `level` is `none` or `unknown`, equivalent actions MUST NOT be automatically re-issued or re-executed.
+**Retry model.** v0.1 has no in-executor retry. An executor MUST NOT re-execute an action for which any terminal action event exists (invariant 9); a failed action can only be retried by the wayfinder issuing a **new** recommendation with a new `recommendation_id` and `action_id`. `idempotency.max_attempts` bounds the total number of issuances of equivalent actions (same `idempotency.key`); `safe_to_retry` governs whether the wayfinder may re-issue after failure and whether interruption recovery may re-execute (§11.3). If `level` is `none` or `unknown`, equivalent actions MUST NOT be automatically re-issued or re-executed.
 
 ## 8.2 Risk
 
@@ -1395,27 +1395,27 @@ shell:
     - reboot
 ```
 
-The `denied_argv0` list is a crude mechanical backstop, not a safety analysis; local policy SHOULD extend it. The executor MUST NOT trust oracle risk metadata as proof of safety. Its own enforcement is limited to **mechanical** checks — declared risk metadata against policy, resolved `cwd`/path containment, `argv[0]` allow/deny lists, env entry shape, `requires_shell`/`pty` flags, and artifact path rules. A dumb executor is not expected (or permitted) to semantically analyze commands; that would be hidden judgment.
+The `denied_argv0` list is a crude mechanical backstop, not a safety analysis; local policy SHOULD extend it. The executor MUST NOT trust wayfinder risk metadata as proof of safety. Its own enforcement is limited to **mechanical** checks — declared risk metadata against policy, resolved `cwd`/path containment, `argv[0]` allow/deny lists, env entry shape, `requires_shell`/`pty` flags, and artifact path rules. A dumb executor is not expected (or permitted) to semantically analyze commands; that would be hidden judgment.
 
 ---
 
 # 9. Dry-Run and Explanation Modes
 
-## 9.1 Oracle Preview
+## 9.1 Wayfinder Preview
 
-`oracle next --mode=preview` returns a non-executable recommendation. It MUST NOT append events, create leases, or reserve IDs needed for execution.
+`wayfinder next --mode=preview` returns a non-executable recommendation. It MUST NOT append events, create leases, or reserve IDs needed for execution.
 
 The executor MAY use preview for display, validation, policy evaluation, or cheap precondition checks. It MUST re-query with `--mode=issue` before execution.
 
 ## 9.2 Issued Recommendation
 
-`oracle next --mode=issue` appends `recommendation.issued` and returns an executable recommendation.
+`wayfinder next --mode=issue` appends `recommendation.issued` and returns an executable recommendation.
 
 ## 9.3 Executor Dry-Run
 
 A dry-run executor SHOULD:
 
-1. Fetch `oracle next --mode=preview`.
+1. Fetch `wayfinder next --mode=preview`.
 2. Validate schema and capabilities.
 3. Evaluate local policy.
 4. Evaluate cheap supported preconditions.
@@ -1451,9 +1451,9 @@ mark goal done
 mark goal failed
 mark goal blocked
 cancel goal
-answer oracle question
+answer wayfinder question
 record observation
-correct oracle assumption/fact
+correct wayfinder assumption/fact
 change policy/preference
 force execution subject to policy
 ```
@@ -1462,7 +1462,7 @@ force execution subject to policy
 
 ```json
 {
-  "schema": "oip.update/0.1",
+  "schema": "wip.update/0.1",
   "protocol_version": "0.1",
   "update_id": "upd_override_01",
   "goal_id": "goal_01",
@@ -1532,24 +1532,24 @@ unsafe
 
 The `override` object requires `decision` and `reason`. `mark_blocked` MAY include `reason_code` (§7.5 rule 9). Authority requirements are in §5.1.
 
-A replacement action MUST include the same risk and idempotency metadata required for oracle-issued executable actions, or the executor MUST refuse to run it until the oracle or human supplies that metadata.
+A replacement action MUST include the same risk and idempotency metadata required for wayfinder-issued executable actions, or the executor MUST refuse to run it until the wayfinder or human supplies that metadata.
 
-When `override.decision` is `replace`, the oracle MUST materialize the replacement as a normal executable recommendation in `recommendation.overridden.data.replacement_recommendation`. The replacement recommendation MUST include `basis`, `lease`, `expires_at`, `risk`, `idempotency`, and `action`, and MUST set `supersedes` to include the original recommendation. A dumb executor MUST treat the replacement exactly like an oracle-issued executable recommendation and MUST NOT execute a bare `replacement_action` directly. For freshness (§4.2), the replacement's issuance anchor is the `recommendation.overridden` event that carries it.
+When `override.decision` is `replace`, the wayfinder MUST materialize the replacement as a normal executable recommendation in `recommendation.overridden.data.replacement_recommendation`. The replacement recommendation MUST include `basis`, `lease`, `expires_at`, `risk`, `idempotency`, and `action`, and MUST set `supersedes` to include the original recommendation. A dumb executor MUST treat the replacement exactly like a wayfinder-issued executable recommendation and MUST NOT execute a bare `replacement_action` directly. For freshness (§4.2), the replacement's issuance anchor is the `recommendation.overridden` event that carries it.
 
 ## 10.3 Conflict Resolution
 
 Default authority precedence:
 
 ```text
-policy_admin > owner > operator > executor > oracle > observer
+policy_admin > owner > operator > executor > wayfinder > observer
 ```
 
 Rules:
 
-1. A human override does not erase the oracle recommendation.
-2. The oracle's next response MUST either honor the override or return `blocked` with `reason_code: unsupported_override`.
-3. A dumb executor MUST NOT execute a replacement action unless it passes the same schema, freshness, claim, risk, and idempotency checks as oracle-issued actions.
-4. `force` only bypasses oracle recommendation logic. It MUST NOT bypass executor safety policy unless local policy explicitly allows authenticated owner override.
+1. A human override does not erase the wayfinder recommendation.
+2. The wayfinder's next response MUST either honor the override or return `blocked` with `reason_code: unsupported_override`.
+3. A dumb executor MUST NOT execute a replacement action unless it passes the same schema, freshness, claim, risk, and idempotency checks as wayfinder-issued actions.
+4. `force` only bypasses wayfinder recommendation logic. It MUST NOT bypass executor safety policy unless local policy explicitly allows authenticated owner override.
 
 ---
 
@@ -1560,67 +1560,67 @@ The dumb executor preserves the contract; it does not reason about hidden intent
 ## 11.1 Required Loop
 
 ```pseudo
-capabilities = oracle.capabilities()
-status = oracle.status(goal_id)
+capabilities = wayfinder.capabilities()
+status = wayfinder.status(goal_id)
 verify_event_log_head(status.event_log_head)
 
 while status.goal_status not in ["succeeded", "failed", "cancelled"]:
-    rec = oracle.next(goal_id, mode="issue", explain="structured")
+    rec = wayfinder.next(goal_id, mode="issue", explain="structured")
 
     validate_schema(rec)
     reject_if_unknown_required_capability(rec)
 
     if rec.recommendation_type == "done":
-        oracle.update(recommendation_disposition=accepted)   # oracle appends goal.completed
+        wayfinder.update(recommendation_disposition=accepted)   # wayfinder appends goal.completed
         exit 0
 
     if rec.recommendation_type == "wait":
         if now < rec.wait.until_time: sleep_until(rec.wait.until_time)
-        status = oracle.status(goal_id)
+        status = wayfinder.status(goal_id)
         continue
 
     if rec.recommendation_type in ["blocked", "unsafe", "question"]:
         # Non-interactive executors MUST exit here (exit 0, status in JSON)
         # rather than poll; interactive executors display and wait for input.
         display_or_exit(rec)
-        status = oracle.status(goal_id)
+        status = wayfinder.status(goal_id)
         continue
 
     if rec.recommendation_type != "action":
-        oracle.update(recommendation_disposition=rejected,
+        wayfinder.update(recommendation_disposition=rejected,
                       reason_code=missing_capability)
-        status = oracle.status(goal_id)
+        status = wayfinder.status(goal_id)
         continue
 
     reject_if_non_executable_stale_or_claimed(rec)     # §4.2 conditions 1-7
 
     decision = evaluate_local_policy(rec.action, rec.risk, rec.idempotency)
     if decision.denied:
-        oracle.update(policy_denied)
-        status = oracle.status(goal_id)
+        wayfinder.update(policy_denied)
+        status = wayfinder.status(goal_id)
         continue
     if decision.requires_human:
-        oracle.update(approval request/result)
+        wayfinder.update(approval request/result)
         if denied: continue
 
     preconditions = check_supported_preconditions(rec.action.preconditions)
     if not preconditions.ok:
-        oracle.update(action_result.status=blocked)
-        status = oracle.status(goal_id)
+        wayfinder.update(action_result.status=blocked)
+        status = wayfinder.status(goal_id)
         continue
 
-    oracle.update(recommendation_disposition=accepted)   # claims the lease (§4.2.7)
+    wayfinder.update(recommendation_disposition=accepted)   # claims the lease (§4.2.7)
     persist_locally(update_id, recommendation_id, action_id)  # before spawning
-    oracle.update(action_started)
+    wayfinder.update(action_started)
 
     result = execute_exactly_one_action(rec.action)
     artifacts = store_and_hash_outputs(result)
-    oracle.update(action_result with artifacts)
+    wayfinder.update(action_result with artifacts)
 
-    status = oracle.status(goal_id)
+    status = wayfinder.status(goal_id)
 ```
 
-No update is required for `wait`, `blocked`, or `unsafe` recommendations the executor merely observes; dispositions for them are optional. Executors SHOULD apply backoff and a loop-detection cap when the oracle repeatedly issues recommendations the executor cannot act on; oracles SHOULD NOT re-issue a structurally identical action after `executor.policy_denied` for it.
+No update is required for `wait`, `blocked`, or `unsafe` recommendations the executor merely observes; dispositions for them are optional. Executors SHOULD apply backoff and a loop-detection cap when the wayfinder repeatedly issues recommendations the executor cannot act on; wayfinders SHOULD NOT re-issue a structurally identical action after `executor.policy_denied` for it.
 
 ## 11.2 Executor MUST Rules
 
@@ -1635,15 +1635,15 @@ The executor MUST:
 - Execute `shell.argv` without shell expansion unless `requires_shell: true` and policy permits it.
 - Treat `requires_shell: true` and `env.mode: "inherit"` as elevated risk requiring approval under the default policy.
 - Reject `pty: true` in v0.1.
-- Never re-execute after failure: retries occur only through oracle re-issuance (§8.1).
+- Never re-execute after failure: retries occur only through wayfinder re-issuance (§8.1).
 - Track attempts locally by `recommendation_id`, `action_id`, and `idempotency.key`.
 - Durably record `update_id`, `recommendation_id`, and `action_id` before spawning the child process.
 - Capture command failure as an action result, not as protocol failure.
-- Retry failed `oracle update` submissions using the same `update_id` after an action has executed.
+- Retry failed `wayfinder update` submissions using the same `update_id` after an action has executed.
 - Kill the child's process group on timeout when the platform supports process groups.
 - Store stdout/stderr as separate artifacts when they exceed local inline limits.
-- Redact secrets before hashing and publishing artifacts, using locally configured redaction patterns (redaction patterns are local policy input, not oracle-supplied).
-- Re-query the oracle after each successful update.
+- Redact secrets before hashing and publishing artifacts, using locally configured redaction patterns (redaction patterns are local policy input, not wayfinder-supplied).
+- Re-query the wayfinder after each successful update.
 
 ## 11.3 Interruption Rule
 
@@ -1655,13 +1655,13 @@ If interruption occurs after external action execution but before update submiss
 
 ```json
 {
-  "schema": "oip.capabilities/0.1",
+  "schema": "wip.capabilities/0.1",
   "protocol_version": "0.1",
   "protocol_versions": ["0.1"],
-  "oracle": {
-    "name": "local-oracle",
+  "wayfinder": {
+    "name": "local-wayfinder",
     "version": "0.3.0",
-    "instance_id": "oracle_host_abc"
+    "instance_id": "wayfinder_host_abc"
   },
   "transports": ["cli", "jsonrpc-stdio"],
   "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
@@ -1738,7 +1738,7 @@ If interruption occurs after external action execution but before update submiss
 }
 ```
 
-Capabilities MUST enumerate every enum value the oracle may emit outside the required core. The `features` object advertises: `supersede` (support for `oracle next --supersede`), `verify` (the optional `oracle verify` command), `cancellation` (JSON-RPC cancellation), and `pty` (always `false` in v0.1).
+Capabilities MUST enumerate every enum value the wayfinder may emit outside the required core. The `features` object advertises: `supersede` (support for `wayfinder next --supersede`), `verify` (the optional `wayfinder verify` command), `cancellation` (JSON-RPC cancellation), and `pty` (always `false` in v0.1).
 
 ---
 
@@ -1750,7 +1750,7 @@ Shell execution:
 - `requires_shell: false` means no shell metacharacter interpretation.
 - `requires_shell: true` MUST require explicit approval under default policy and MUST NOT be automatically executed by a conforming v0.1 dumb executor.
 - `argv[0]` MUST NOT be resolved against the current directory (§4.3).
-- Executors MUST evaluate the mechanical checks of §8.3 against `argv`, `cwd`, `env`, stdin, and artifact paths even when the oracle's `risk` metadata claims a lower risk.
+- Executors MUST evaluate the mechanical checks of §8.3 against `argv`, `cwd`, `env`, stdin, and artifact paths even when the wayfinder's `risk` metadata claims a lower risk.
 
 Paths:
 
@@ -1768,11 +1768,11 @@ Environment and secrets:
 
 Actor identity:
 
-- Any process with store access can claim any `actor` identity in submitted JSON. The trust boundary of v0.1 is the filesystem. `authenticated: true` MUST be oracle-derived from a local mechanism (§2.1), never client-asserted, and privileged operations (§5.1) MUST require it.
+- Any process with store access can claim any `actor` identity in submitted JSON. The trust boundary of v0.1 is the filesystem. `authenticated: true` MUST be wayfinder-derived from a local mechanism (§2.1), never client-asserted, and privileged operations (§5.1) MUST require it.
 
 Human approval surfaces:
 
-- Interfaces that ask a human to approve an action MUST display `shell.argv` (and `cwd`) verbatim. They MUST NOT present only `title`, `summary`, or `command_for_display`: those are oracle-controlled prose and can misdescribe the command.
+- Interfaces that ask a human to approve an action MUST display `shell.argv` (and `cwd`) verbatim. They MUST NOT present only `title`, `summary`, or `command_for_display`: those are wayfinder-controlled prose and can misdescribe the command.
 
 Network and external side effects:
 
@@ -1800,7 +1800,7 @@ Storage hygiene:
 The normative schemas are the object definitions in this document. Implementations SHOULD publish JSON Schema files matching these requirements. At minimum, validators MUST enforce:
 
 - Required common fields and `protocol_version`.
-- Mandatory `oip.response/0.1` envelopes for successful non-history CLI commands.
+- Mandatory `wip.response/0.1` envelopes for successful non-history CLI commands.
 - Closed core enums, with namespaced extension values (`{namespace}.{name}`) allowed only when advertised in capabilities.
 - Conditional recommendation requirements by `recommendation_type`.
 - Conditional update payload requirements by `update_type`.
@@ -1868,7 +1868,7 @@ require data schema appropriate for type
 require seq == previous seq + 1 (readers MUST fail corrupt_event_log on gaps,
   duplicates, or non-monotonic seq)
 require prev_event_hash == previous event_hash
-reject reserved event types (goal.updated, question.asked, oracle.status.reported)
+reject reserved event types (goal.updated, question.asked, wayfinder.status.reported)
 forbid duplicate terminal action event for recommendation_id/action_id except
   idempotent update replay
 recommendation.accepted, action.started, action.output_recorded MUST carry
@@ -1884,7 +1884,7 @@ Each implementation SHOULD pass these tests before claiming v0.1 compatibility.
 ## 15.1 Successful Shell Action
 
 Initial log: `goal.created seq=1`.
-Oracle response: issued `action` with `shell.argv=["true"]`, expected exit `[0]`.
+Wayfinder response: issued `action` with `shell.argv=["true"]`, expected exit `[0]`.
 Executor behavior: accepts, starts, runs, reports completed.
 Expected events: `recommendation.issued`, `recommendation.accepted`, `action.started`, `action.completed`.
 Pass: command exit code is represented in JSON and event hash chain verifies.
@@ -1892,21 +1892,21 @@ Pass: command exit code is represented in JSON and event hash chain verifies.
 ## 15.2 Failed Shell Action
 
 Initial log: `goal.created seq=1`.
-Oracle response: issued `shell.argv=["false"]`, expected exit `[0]`.
+Wayfinder response: issued `shell.argv=["false"]`, expected exit `[0]`.
 Executor behavior: reports `action_result.status=failed`, `process.exit_code=1`.
 Expected events: `action.failed`.
-Pass: `oracle update` exits 0 and status carries failure details.
+Pass: `wayfinder update` exits 0 and status carries failure details.
 
 ## 15.3 Unsupported Action Kind
 
-Oracle response: issued `action.kind="http"` without advertised extension support.
+Wayfinder response: issued `action.kind="http"` without advertised extension support.
 Executor behavior: does not execute; submits `recommendation_disposition=rejected` with `reason_code=missing_capability`.
 Expected events: `recommendation.rejected` with `reason_code=missing_capability`.
 Pass: no external side effect occurs, and the outcome is this single canonical event shape.
 
 ## 15.4 Unsupported Precondition
 
-Oracle response: precondition `kind="custom"` without advertised support.
+Wayfinder response: precondition `kind="custom"` without advertised support.
 Executor behavior: does not execute.
 Expected event: `action.blocked` with `reason_code=missing_capability`.
 Pass: unsupported precondition is not ignored.
@@ -1921,7 +1921,7 @@ Pass: no `action.started` event is appended.
 ## 15.6 Duplicate Executor Attempt
 
 Initial log: `action.completed` exists for `rec_1/act_1`.
-Oracle response: same recommendation is observed by executor B.
+Wayfinder response: same recommendation is observed by executor B.
 Executor behavior: no execution; submits skipped/observation if needed.
 Expected events: no second terminal action event for the same recommendation/action.
 Pass: external action runs at most once.
@@ -1935,7 +1935,7 @@ Pass: no two non-parallel executable recommendations exist.
 
 ## 15.8 Human Override Replacement
 
-Initial log: oracle recommends `npm test`.
+Initial log: wayfinder recommends `npm test`.
 Update: human replaces with `pnpm test` and supplies risk/idempotency.
 Executor behavior: validates replacement and policy before execution.
 Expected events: `recommendation.overridden`, then action lifecycle events for replacement.
@@ -1943,14 +1943,14 @@ Pass: original recommendation remains in history.
 
 ## 15.9 Policy-Denied Destructive Action
 
-Oracle response: `shell.argv=["rm","-rf","build"]`, risk includes `delete`.
+Wayfinder response: `shell.argv=["rm","-rf","build"]`, risk includes `delete`.
 Executor behavior: denies under default policy (`delete` class and `denied_argv0`).
 Expected event: `executor.policy_denied`.
 Pass: command is not run.
 
 ## 15.10 Timeout
 
-Oracle response: `shell.argv=["sleep","60"]`, `timeout_seconds=1`.
+Wayfinder response: `shell.argv=["sleep","60"]`, `timeout_seconds=1`.
 Executor behavior: terminates the process group, records timeout.
 Expected event: `action.timed_out`, with `process.timed_out=true`.
 Pass: no child process remains under executor control.
@@ -1965,7 +1965,7 @@ Pass: every artifact reference hash verifies.
 ## 15.12 Corrupted Event Log
 
 Initial log: final JSONL line is truncated or hash mismatch occurs.
-Oracle/executor behavior: detects corruption.
+Wayfinder/executor behavior: detects corruption.
 Expected result: `corrupt_event_log`; no automatic execution or append.
 Pass: implementation refuses to build on unverifiable history.
 
@@ -1979,13 +1979,13 @@ Pass: replay is deterministic.
 ## 15.14 Mandatory CLI Envelope
 
 Initial log: `goal.created seq=1`.
-Command: `oracle status --goal-id goal_01 --format=json`.
-Expected result: stdout is one JSON object with `schema="oip.response/0.1"` and `result.schema="oip.status/0.1"`.
+Command: `wayfinder status --goal-id goal_01 --format=json`.
+Expected result: stdout is one JSON object with `schema="wip.response/0.1"` and `result.schema="wip.status/0.1"`.
 Pass: a client can parse every successful non-history command through the same envelope shape.
 
 ## 15.15 Idempotent Goal Create
 
-Command input: same `oip.goal_create/0.1` object with `create_id="create_01"` submitted twice.
+Command input: same `wip.goal_create/0.1` object with `create_id="create_01"` submitted twice.
 Expected result: second response returns the original goal, original `goal.created` event, current status, and `replayed:true`.
 Pass: no second goal or second `goal.created` event is created.
 
@@ -2011,15 +2011,15 @@ Pass: duplicate external execution cannot be legitimized by the log.
 
 ## 15.19 Secret Environment Value Rejected
 
-Oracle response: shell action includes `env.set.API_KEY={"value":"secret","sensitive":true}`.
+Wayfinder response: shell action includes `env.set.API_KEY={"value":"secret","sensitive":true}`.
 Executor behavior: rejects schema/policy and does not execute.
 Expected result: no command execution; optional `executor.policy_denied` or `recommendation.rejected`.
 Pass: plaintext sensitive values do not enter event history.
 
 ## 15.20 Preview Is Not Explainable Later
 
-Command: `oracle next --mode=preview` returns `recommendation_id=rec_preview_01`.
-Command: later `oracle explain --recommendation-id rec_preview_01`.
+Command: `wayfinder next --mode=preview` returns `recommendation_id=rec_preview_01`.
+Command: later `wayfinder explain --recommendation-id rec_preview_01`.
 Expected result: `invalid_input`.
 Pass: preview-only recommendations are not treated as durable history.
 
@@ -2033,7 +2033,7 @@ Pass: executor can validate the replacement without hidden judgment.
 ## 15.22 JSON-RPC Result Shape
 
 Command: JSON-RPC `goal.status` request with `id="req_01"`.
-Expected result: JSON-RPC `result` is an `oip.status/0.1` object, not an embedded `oip.response/0.1` envelope.
+Expected result: JSON-RPC `result` is a `wip.status/0.1` object, not an embedded `wip.response/0.1` envelope.
 Pass: CLI and JSON-RPC correlation rules are equivalent without double wrapping.
 
 ## 15.23 Accepting Done Completes Goal
@@ -2045,7 +2045,7 @@ Pass: replayed status is `goal_status="succeeded"` and `open_recommendation_id=n
 
 ## 15.24 Fresh Immediately After Issuance
 
-Initial log: `goal.created seq=1`; `oracle next --mode=issue` appends `recommendation.issued seq=2` (hash H2); head is H2.
+Initial log: `goal.created seq=1`; `wayfinder next --mode=issue` appends `recommendation.issued seq=2` (hash H2); head is H2.
 Executor behavior: evaluates §4.2 conditions and proceeds.
 Expected events: `recommendation.accepted seq=3`, `action.started seq=4`.
 Pass: the recommendation is NOT judged stale when the only post-basis event is its own issuance.
@@ -2068,20 +2068,20 @@ Pass: an already-started action can always land its terminal result (§4.2 termi
 
 Initial log: `goal.created seq=1`, issued seq=2, `recommendation.accepted seq=3` by actor `exec-A`.
 Input: actor `exec-B` submits `action_started` for the same recommendation/action.
-Expected result: oracle rejects with `storage_conflict`; no `action.started` by `exec-B`; the external command never runs under `exec-B`.
+Expected result: wayfinder rejects with `storage_conflict`; no `action.started` by `exec-B`; the external command never runs under `exec-B`.
 Pass: §4.2 condition 7 prevents concurrent duplicate execution.
 
 ## 15.28 Supersession Is Explicit and Atomic
 
 Initial log: `goal.created seq=1`, issued `rec_01` seq=2 (open).
-Input: `oracle next --mode=issue` without `--supersede`, then with `--supersede`.
+Input: `wayfinder next --mode=issue` without `--supersede`, then with `--supersede`.
 Expected result: first call fails `storage_conflict` with no events; second call atomically appends `recommendation.superseded seq=3` (targeting `rec_01`) and `recommendation.issued seq=4` (`rec_02` with `supersedes:["rec_01"]`).
 Pass: the log gains either zero or exactly two events; `open_recommendation_id` replays to `rec_02`.
 
 ## 15.29 Expiry Is Event-Driven, Not Clock-Driven
 
 Initial log: `goal.created seq=1`, issued seq=2 with `expires_at` in the past; no further events.
-Behavior: `oracle status` at two different wall-clock times; then an actor submits `recommendation_disposition=expired`.
+Behavior: `wayfinder status` at two different wall-clock times; then an actor submits `recommendation_disposition=expired`.
 Expected results: both status reads are identical (modulo `observed_at`) with `open_recommendation_id="rec_01"`; execution attempts fail per §4.2 condition 4; after the update, `recommendation.expired seq=3` is appended and `open_recommendation_id` replays to `null`.
 Pass: the reducer never consults the clock; expiry becomes visible only through the event.
 
@@ -2096,7 +2096,7 @@ Pass: replayed `goal_status="succeeded"`; a partial append (only one of the two 
 
 Initial log: `goal.created seq=1`.
 Update: `update_type=goal_cancel` with `reason`, authenticated `owner` actor.
-Expected events: `goal.cancelled seq=2`; subsequent `oracle next --mode=issue` fails `invalid_input`.
+Expected events: `goal.cancelled seq=2`; subsequent `wayfinder next --mode=issue` fails `invalid_input`.
 Pass: replayed `goal_status="cancelled"`; unauthenticated or `operator` actors are rejected with `policy_denied`.
 
 ## 15.32 Idempotent Replay Returns Current Status
@@ -2107,7 +2107,7 @@ Pass: no new events are appended; status reflects the current log.
 
 ## 15.33 Cross-Implementation Lock Exclusion
 
-Setup: implementation A holds `append.lock` (created via `O_CREAT|O_EXCL`, valid `expires_at`); independent implementation B runs `oracle update` on the same goal directory.
+Setup: implementation A holds `append.lock` (created via `O_CREAT|O_EXCL`, valid `expires_at`); independent implementation B runs `wayfinder update` on the same goal directory.
 Expected result: B fails with `storage_conflict` or waits for release; after both writers finish, the chain verifies with strictly monotonic `seq` and no duplicates.
 Pass: two independent codebases achieve mutual exclusion through the pinned primitive.
 
@@ -2115,14 +2115,14 @@ Pass: two independent codebases achieve mutual exclusion through the pinned prim
 
 Initial log: `goal.created seq=1` plus 4 more events.
 Input: JSON-RPC `goal.history {"goal_id":"goal_01","since_seq":0}` with `id="req_9"`.
-Expected result: `result.events` is an array of 5 `oip.event/0.1` objects canonically identical to the CLI JSONL lines; `truncated:false`; `id` echoed; no envelope nesting.
+Expected result: `result.events` is an array of 5 `wip.event/0.1` objects canonically identical to the CLI JSONL lines; `truncated:false`; `id` echoed; no envelope nesting.
 Pass: CLI JSONL and RPC array are event-for-event equal.
 
 ## 15.35 History Failure Mid-Stream
 
 Setup: log with 100 events; hash mismatch at event 50.
-Input: `oracle history --since-seq 0`.
-Expected result: events 1-49 streamed as valid JSONL; nonzero exit; final line MAY be an `oip.error/0.1` object with `code="corrupt_event_log"`.
+Input: `wayfinder history --since-seq 0`.
+Expected result: events 1-49 streamed as valid JSONL; nonzero exit; final line MAY be a `wip.error/0.1` object with `code="corrupt_event_log"`.
 Pass: client detects incompleteness from the exit code and verifies the received prefix; no fabricated events after the corruption point.
 
 ## 15.36 Redacted Artifact Replacement
@@ -2134,7 +2134,7 @@ Pass: a replayer resolving `art_01` uses the replacement or reports valid-but-un
 
 ## 15.37 Non-Action Payload Nesting
 
-Input: `oracle next --mode=issue` where the oracle returns `recommendation_type="blocked"`.
+Input: `wayfinder next --mode=issue` where the wayfinder returns `recommendation_type="blocked"`.
 Expected result: the recommendation validates with `blocked:{reason_code,reason}` nested, `action` absent, `executable:false`, and no `lease`.
 Pass: an independent validator with `additionalProperties:false` accepts the object byte-for-byte.
 

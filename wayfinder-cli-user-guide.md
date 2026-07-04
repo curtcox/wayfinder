@@ -1,20 +1,20 @@
-# Oracle CLI User Guide
+# Wayfinder CLI User Guide
 
-**Audience:** command-line users driving an oracle that conforms to the
-[Oracle Interaction Protocol v0.1](oracle-interaction-protocol-v0.1.md) (OIP).
+**Audience:** command-line users driving a wayfinder that conforms to the
+[Wayfinder Interaction Protocol v0.1](wayfinder-interaction-protocol-v0.1.md) (WIP).
 **Assumes:** you are comfortable with a Unix shell, JSON, and `jq`.
 
 This guide covers day-to-day use: creating goals, getting and acting on
 recommendations, reporting results, letting the executor drive, working in
 plain English through LLM front-ends, wrapping other command-line tools,
-seeing what different oracle and executor implementations look like under the
-hood, and composing oracles. It is not the protocol reference —
+seeing what different wayfinder and executor implementations look like under the
+hood, and composing wayfinders. It is not the protocol reference —
 when this guide and the spec disagree, the spec wins.
 
-**Tool names used here.** The spec defines the `oracle` command. The names
-`oracle-exec` (the dumb executor), `oracle-wrap` (the universal CLI-tool
-wrapper), and the LLM-backed prose front-ends `oracle-do`, `oracle-tell`,
-`oracle-ask`, and `oracle-chat` (§8) are illustrative placeholders —
+**Tool names used here.** The spec defines the `wayfinder` command. The names
+`wayfinder-exec` (the dumb executor), `wayfinder-wrap` (the universal CLI-tool
+wrapper), and the LLM-backed prose front-ends `wayfinder-do`, `wayfinder-tell`,
+`wayfinder-ask`, and `wayfinder-chat` (§8) are illustrative placeholders —
 substitute whatever your installation provides. Security, key management, and permission policy are covered in a
 separate document; this guide only flags the places where they matter.
 
@@ -22,26 +22,27 @@ separate document; this guide only flags the places where they matter.
 
 ## 1. The mental model
 
-The oracle is a black box that knows (or figures out) *what to do next* to
-advance a goal. It never touches your system. Everything that happens is a loop
-between three parties:
+The wayfinder is a black box that knows (or figures out) *what to do next* to
+advance a goal. Conceptually, it is an oracle for next steps; operationally, it
+is the `wayfinder` command and protocol. It never touches your system.
+Everything that happens is a loop between three parties:
 
 ```text
-you / executor:  "here is a goal"            -> oracle goal create
-oracle:          "do this next"              -> oracle next
+you / executor:  "here is a goal"            -> wayfinder goal create
+wayfinder:          "do this next"              -> wayfinder next
 you / executor:  run the action (or don't)
-you / executor:  "here is what happened"     -> oracle update
+you / executor:  "here is what happened"     -> wayfinder update
                  ...repeat until done...
 ```
 
 Three things make this different from just asking a chatbot for shell commands:
 
 1. **Everything is recorded.** Every goal has an append-only, hash-chained
-   event log (`.oracle/goals/<goal_id>/events.ndjson`). Nothing is ever edited;
+   event log (`.wayfinder/goals/<goal_id>/events.ndjson`). Nothing is ever edited;
    corrections and redactions are new events. You can always audit exactly what
    was recommended, what ran, and what came back.
-2. **The oracle never executes anything.** You do, or a deliberately dumb
-   executor does. The oracle only appends events as the defined result of the
+2. **The wayfinder never executes anything.** You do, or a deliberately dumb
+   executor does. The wayfinder only appends events as the defined result of the
    commands you run.
 3. **Structured fields are law, prose is advisory.** A recommendation's
    `summary` or `title` can say anything; only `action.shell.argv` is what
@@ -52,29 +53,29 @@ Three things make this different from just asking a chatbot for shell commands:
 ### Command cheat sheet
 
 ```bash
-oracle capabilities                              # what this oracle supports
-oracle goal create < goal.json                   # start a goal
-oracle status --goal-id GOAL                     # where things stand
-oracle next --goal-id GOAL --mode=preview        # peek, no commitment
-oracle next --goal-id GOAL --mode=issue          # get an executable recommendation
-oracle update --goal-id GOAL < update.json       # report anything back
-oracle history --goal-id GOAL --since-seq 0      # the full event log (JSONL)
-oracle explain --goal-id GOAL --recommendation-id REC   # why it recommended that
-oracle verify --goal-id GOAL                     # check log + artifact integrity
+wayfinder capabilities                              # what this wayfinder supports
+wayfinder goal create < goal.json                   # start a goal
+wayfinder status --goal-id GOAL                     # where things stand
+wayfinder next --goal-id GOAL --mode=preview        # peek, no commitment
+wayfinder next --goal-id GOAL --mode=issue          # get an executable recommendation
+wayfinder update --goal-id GOAL < update.json       # report anything back
+wayfinder history --goal-id GOAL --since-seq 0      # the full event log (JSONL)
+wayfinder explain --goal-id GOAL --recommendation-id REC   # why it recommended that
+wayfinder verify --goal-id GOAL                     # check log + artifact integrity
 ```
 
 And the LLM-backed prose front-ends (illustrative names, §8), for when you
 would rather type a sentence than compose JSON:
 
 ```bash
-oracle-do "…a goal in plain language…"           # create a goal and drive it
-oracle-tell --goal-id GOAL "…anything…"          # prose -> the right structured update
-oracle-ask  --goal-id GOAL "…a question…"        # prose answers from the log (read-only)
-oracle-chat --goal-id GOAL                       # interactive session over the same verbs
+wayfinder-do "…a goal in plain language…"           # create a goal and drive it
+wayfinder-tell --goal-id GOAL "…anything…"          # prose -> the right structured update
+wayfinder-ask  --goal-id GOAL "…a question…"        # prose answers from the log (read-only)
+wayfinder-chat --goal-id GOAL                       # interactive session over the same verbs
 ```
 
 Every non-history command prints exactly one JSON object on stdout — a
-`oip.response/0.1` envelope on success, an `oip.error/0.1` object on failure.
+`wip.response/0.1` envelope on success, a `wip.error/0.1` object on failure.
 `stderr` is for humans only. Exit code 0 means "the command worked", **not**
 "the goal/action succeeded" — success and failure of goals and actions live in
 the JSON.
@@ -82,7 +83,7 @@ the JSON.
 Useful reflex: pipe everything through `jq`.
 
 ```bash
-oracle status --goal-id goal_01 | jq '.result | {goal_status, open_recommendation_id, needs}'
+wayfinder status --goal-id goal_01 | jq '.result | {goal_status, open_recommendation_id, needs}'
 ```
 
 ---
@@ -90,7 +91,7 @@ oracle status --goal-id goal_01 | jq '.result | {goal_status, open_recommendatio
 ## 2. Quick start: a complete session by hand
 
 This walkthrough drives one goal to completion manually. In practice you will
-usually let `oracle-exec` do steps 3–5 (see §4), or skip the JSON entirely and
+usually let `wayfinder-exec` do steps 3–5 (see §4), or skip the JSON entirely and
 work in prose (§8) — but doing it by hand once teaches you what those tools do
 on your behalf.
 
@@ -101,9 +102,9 @@ key: if the command times out and you rerun it with the same body, you get the
 same goal back (`"replayed": true`) instead of a duplicate.
 
 ```bash
-oracle goal create --request-id req_create_1 <<'EOF'
+wayfinder goal create --request-id req_create_1 <<'EOF'
 {
-  "schema": "oip.goal_create/0.1",
+  "schema": "wip.goal_create/0.1",
   "protocol_version": "0.1",
   "create_id": "create_fix_tests_2026_07_04",
   "created_at": "2026-07-04T18:00:00Z",
@@ -118,7 +119,7 @@ EOF
 Notes:
 
 - `workspace_uri` must be an **absolute** `file:` URI to an existing
-  directory. The oracle store lives at `.oracle/` under it by default.
+  directory. The wayfinder store lives at `.wayfinder/` under it by default.
 - `actor` is who you are. `authority` matters later: cancelling a goal or
   marking it done/failed requires an *authenticated* `owner` or
   `policy_admin`. (How authentication is established is local policy — see the
@@ -127,24 +128,24 @@ Notes:
 Capture the goal ID:
 
 ```bash
-GOAL=$(oracle goal create < goal.json | jq -r '.result.goal.goal_id')
+GOAL=$(wayfinder goal create < goal.json | jq -r '.result.goal.goal_id')
 ```
 
 ### 2.2 Peek before committing: preview
 
 ```bash
-oracle next --goal-id "$GOAL" --mode=preview --explain=summary | jq '.result'
+wayfinder next --goal-id "$GOAL" --mode=preview --explain=summary | jq '.result'
 ```
 
 Preview appends **nothing** to the log and the returned recommendation is
-marked `"executable": false`. Use it to see what the oracle is thinking, sanity-
+marked `"executable": false`. Use it to see what the wayfinder is thinking, sanity-
 check `argv`, or evaluate policy — then throw it away. A previewed
 `recommendation_id` cannot be executed or `explain`ed later; you must issue.
 
 ### 2.3 Issue a recommendation
 
 ```bash
-oracle next --goal-id "$GOAL" --mode=issue --explain=structured > next.json
+wayfinder next --goal-id "$GOAL" --mode=issue --explain=structured > next.json
 jq '.result' next.json
 ```
 
@@ -192,7 +193,7 @@ You will also need the **issuance event's `seq` and `event_hash`** to report
 back. Get them from the log:
 
 ```bash
-oracle history --goal-id "$GOAL" --since-seq 0 \
+wayfinder history --goal-id "$GOAL" --since-seq 0 \
   | jq -c 'select(.type == "recommendation.issued")' | tail -1 \
   | jq '{seq, event_hash}'
 ```
@@ -210,9 +211,9 @@ Updates are JSON documents on stdin, each with a unique `update_id`
 same action):
 
 ```bash
-oracle update --goal-id "$GOAL" <<'EOF'
+wayfinder update --goal-id "$GOAL" <<'EOF'
 {
-  "schema": "oip.update/0.1",
+  "schema": "wip.update/0.1",
   "protocol_version": "0.1",
   "update_id": "upd_accept_01",
   "goal_id": "goal_01",
@@ -231,9 +232,9 @@ EOF
 **Report started**, then actually run the command yourself:
 
 ```bash
-oracle update --goal-id "$GOAL" <<'EOF'
+wayfinder update --goal-id "$GOAL" <<'EOF'
 {
-  "schema": "oip.update/0.1",
+  "schema": "wip.update/0.1",
   "protocol_version": "0.1",
   "update_id": "upd_started_01",
   "goal_id": "goal_01",
@@ -252,16 +253,16 @@ cd /home/curt/project && make test; echo "exit=$?"
 ```
 
 (Shortcut: a single update may combine `recommendation_disposition` with
-`action_started` or `action_result`; the oracle appends both events
+`action_started` or `action_result`; the wayfinder appends both events
 atomically.)
 
 **Report the result** — success here, but the shape is identical for failure;
 just change `status` and the process fields:
 
 ```bash
-oracle update --goal-id "$GOAL" <<'EOF'
+wayfinder update --goal-id "$GOAL" <<'EOF'
 {
-  "schema": "oip.update/0.1",
+  "schema": "wip.update/0.1",
   "protocol_version": "0.1",
   "update_id": "upd_result_01",
   "goal_id": "goal_01",
@@ -290,21 +291,21 @@ Rules that matter here:
   command never started. There is no such thing as a silently abandoned action.
 - `action_result.status` is one of `completed`, `failed`, `timed_out`,
   `cancelled`, `blocked`, `skipped`. A failed *command* is still a
-  *successful protocol exchange* — `oracle update` exits 0 and the failure
+  *successful protocol exchange* — `wayfinder update` exits 0 and the failure
   lives in JSON.
 - `changed` records whether the world was mutated (`yes`/`no`/`partial`/
   `unknown`), independently of success. `make test` succeeded but changed
   nothing.
 - Once an action has any terminal event, it is **never re-executed**. Retries
-  happen only when the oracle issues a *new* recommendation.
+  happen only when the wayfinder issues a *new* recommendation.
 
 ### 2.5 Loop until done
 
 ```bash
-oracle next --goal-id "$GOAL" --mode=issue | jq '.result'
+wayfinder next --goal-id "$GOAL" --mode=issue | jq '.result'
 ```
 
-When the oracle believes the goal is complete it returns a non-executable
+When the wayfinder believes the goal is complete it returns a non-executable
 `done` recommendation:
 
 ```json
@@ -318,12 +319,12 @@ When the oracle believes the goal is complete it returns a non-executable
 ```
 
 Accepting a `done` recommendation is what actually completes the goal (the
-oracle atomically appends `recommendation.accepted` + `goal.completed`):
+wayfinder atomically appends `recommendation.accepted` + `goal.completed`):
 
 ```bash
-oracle update --goal-id "$GOAL" <<'EOF'
+wayfinder update --goal-id "$GOAL" <<'EOF'
 {
-  "schema": "oip.update/0.1",
+  "schema": "wip.update/0.1",
   "protocol_version": "0.1",
   "update_id": "upd_accept_done_01",
   "goal_id": "goal_01",
@@ -335,7 +336,7 @@ oracle update --goal-id "$GOAL" <<'EOF'
 }
 EOF
 
-oracle status --goal-id "$GOAL" | jq -r '.result.goal_status'
+wayfinder status --goal-id "$GOAL" | jq -r '.result.goal_status'
 # succeeded
 ```
 
@@ -343,14 +344,14 @@ oracle status --goal-id "$GOAL" | jq -r '.result.goal_status'
 
 ## 3. Reading recommendations: the six types
 
-`oracle next` returns exactly one of six types. Only `action` is executable;
+`wayfinder next` returns exactly one of six types. Only `action` is executable;
 the other five carry their payload in an object named after the type.
 
 | Type | Meaning | What you do |
 |---|---|---|
 | `action` | Run this one structured action. | Review `argv`/`risk`, accept, run, report. |
-| `question` | The oracle needs information. | Answer with a `question_answer` update (§6.1). |
-| `wait` | Nothing useful until `wait.until_time`. | Sleep, then `oracle next` again. |
+| `question` | The wayfinder needs information. | Answer with a `question_answer` update (§6.1). |
+| `wait` | Nothing useful until `wait.until_time`. | Sleep, then `wayfinder next` again. |
 | `blocked` | No progress possible without external change. | Read `blocked.reason_code`/`reason`, fix the world, record an observation. |
 | `done` | Goal appears complete. | Accept it (completes the goal) or reject it with a reason. |
 | `unsafe` | Every known next step violates policy. | Read `unsafe.reason`; involve a human/policy decision. |
@@ -387,28 +388,28 @@ make it stale. Practical consequences:
 
 - If you sit on a recommendation and someone records an observation, your
   `accepted`/`action_started` update will be rejected with
-  `stale_recommendation`. Just run `oracle next --mode=issue` again.
+  `stale_recommendation`. Just run `wayfinder next --mode=issue` again.
 - The **first actor to accept claims the lease.** A second actor trying to
   start the same action gets `storage_conflict`. This is how two executors on
   the same store avoid double-running a command.
 - Past `expires_at`, execution is refused, but status still shows the
   recommendation as open until an event clears it. Any actor may submit a
-  `recommendation_disposition` of `expired` to tidy up (the oracle checks its
+  `recommendation_disposition` of `expired` to tidy up (the wayfinder checks its
   own clock before accepting it).
-- **Once started, always reportable.** If your action already ran, the oracle
+- **Once started, always reportable.** If your action already ran, the wayfinder
   must accept your terminal `action_result` even if the recommendation was
   invalidated mid-flight. Results of things that really happened always land.
 
 ### 3.2 Only one open recommendation at a time
 
 v0.1 has no parallelism. If an executable recommendation is open and you ask
-for another, `oracle next --mode=issue` fails with `storage_conflict`. Your
+for another, `wayfinder next --mode=issue` fails with `storage_conflict`. Your
 options:
 
 ```bash
 # Option A: dispose of the open one (reject it with a reason)
 # Option B: atomically supersede it with a fresh one:
-oracle next --goal-id "$GOAL" --mode=issue --supersede | jq '.result'
+wayfinder next --goal-id "$GOAL" --mode=issue --supersede | jq '.result'
 ```
 
 `--supersede` appends `recommendation.superseded` + `recommendation.issued` in
@@ -426,10 +427,10 @@ do.
 
 ```bash
 # Run the loop for a goal
-oracle-exec run --goal-id "$GOAL"
+wayfinder-exec run --goal-id "$GOAL"
 
 # See what it WOULD do without executing anything (uses --mode=preview)
-oracle-exec dry-run --goal-id "$GOAL"
+wayfinder-exec dry-run --goal-id "$GOAL"
 ```
 
 What "dumb" means for you:
@@ -448,14 +449,14 @@ What "dumb" means for you:
   submits the missing result with the same `update_id` — it never blindly
   re-executes.
 
-A common working style: run `oracle-exec` until it stops, look at
-`oracle status` and the last few history events to see why, unblock (answer a
+A common working style: run `wayfinder-exec` until it stops, look at
+`wayfinder status` and the last few history events to see why, unblock (answer a
 question, grant an approval, record an observation, fix the environment), and
 run it again.
 
 ```bash
-oracle status --goal-id "$GOAL" | jq '.result | {goal_status, reason_code, needs}'
-oracle history --goal-id "$GOAL" --since-seq 0 | tail -5 | jq -c '{seq, type}'
+wayfinder status --goal-id "$GOAL" | jq '.result | {goal_status, reason_code, needs}'
+wayfinder history --goal-id "$GOAL" --since-seq 0 | tail -5 | jq -c '{seq, type}'
 ```
 
 ---
@@ -463,13 +464,13 @@ oracle history --goal-id "$GOAL" --since-seq 0 | tail -5 | jq -c '{seq, type}'
 ## 5. Watching and auditing: status, history, explain, verify
 
 These four commands are the raw feed. If you would rather ask "why is this
-stuck?" in English and get an answer synthesized from them, see `oracle-ask`
+stuck?" in English and get an answer synthesized from them, see `wayfinder-ask`
 (§8.3) — it is built on exactly these reads.
 
 ### 5.1 Status
 
 ```bash
-oracle status --goal-id "$GOAL" | jq '.result'
+wayfinder status --goal-id "$GOAL" | jq '.result'
 ```
 
 ```json
@@ -497,17 +498,17 @@ History is JSONL, one event per line, exactly as stored:
 
 ```bash
 # Everything
-oracle history --goal-id "$GOAL" --since-seq 0
+wayfinder history --goal-id "$GOAL" --since-seq 0
 
 # Incremental polling: remember the last seq you saw
-oracle history --goal-id "$GOAL" --since-seq 12
+wayfinder history --goal-id "$GOAL" --since-seq 12
 
 # Compact life story of the goal
-oracle history --goal-id "$GOAL" --since-seq 0 \
+wayfinder history --goal-id "$GOAL" --since-seq 0 \
   | jq -c '{seq, type, actor: .actor.id, subject}'
 
 # What did action act_03 actually output?
-oracle history --goal-id "$GOAL" --since-seq 0 \
+wayfinder history --goal-id "$GOAL" --since-seq 0 \
   | jq 'select(.type | startswith("action.")) | select(.data.action_id == "act_03") | .data.action_result.output'
 ```
 
@@ -517,10 +518,10 @@ you received as a prefix and verify before relying on it.
 ### 5.3 Explain
 
 ```bash
-oracle explain --goal-id "$GOAL" --recommendation-id rec_04 | jq '.result.explanation'
+wayfinder explain --goal-id "$GOAL" --recommendation-id rec_04 | jq '.result.explanation'
 ```
 
-Returns the oracle's reasoning (`summary`, `evidence` pointing at event IDs,
+Returns the wayfinder's reasoning (`summary`, `evidence` pointing at event IDs,
 `redactions`) for any recommendation that was actually issued. Explanations
 are advisory — useful for humans, never a basis for executor behavior.
 Preview-only recommendations cannot be explained after the fact.
@@ -528,7 +529,7 @@ Preview-only recommendations cannot be explained after the fact.
 ### 5.4 Verify
 
 ```bash
-oracle verify --goal-id "$GOAL" | jq '.result | {ok, problems}'
+wayfinder verify --goal-id "$GOAL" | jq '.result | {ok, problems}'
 ```
 
 Checks the hash chain and artifact digests. Run it whenever something smells
@@ -540,18 +541,18 @@ conservative (only a partial final line may ever be truncated, after backup).
 
 ---
 
-## 6. Talking back to the oracle
+## 6. Talking back to the wayfinder
 
-`oracle update` is the single door for everything you want the oracle to know.
+`wayfinder update` is the single door for everything you want the wayfinder to know.
 Beyond dispositions and action results, the update types you will actually use
 are below. (Each of these can also be produced from a plain-English sentence
-via `oracle-tell` — see §8.2 — which composes exactly these documents.)
+via `wayfinder-tell` — see §8.2 — which composes exactly these documents.)
 
 ### 6.1 Answering questions
 
 ```json
 {
-  "schema": "oip.update/0.1",
+  "schema": "wip.update/0.1",
   "protocol_version": "0.1",
   "update_id": "upd_answer_01",
   "goal_id": "goal_01",
@@ -572,7 +573,7 @@ supersession or expiry, and there are no blanket approvals in v0.1.
 
 ```json
 {
-  "schema": "oip.update/0.1",
+  "schema": "wip.update/0.1",
   "protocol_version": "0.1",
   "update_id": "upd_approve_01",
   "goal_id": "goal_01",
@@ -588,7 +589,7 @@ supersession or expiry, and there are no blanket approvals in v0.1.
 Before approving, always look at the real command, not the summary:
 
 ```bash
-oracle history --goal-id "$GOAL" --since-seq 0 \
+wayfinder history --goal-id "$GOAL" --since-seq 0 \
   | jq 'select(.type=="recommendation.issued") | select(.data.recommendation.recommendation_id=="rec_04")
         | .data.recommendation.action.shell | {argv, cwd, env}'
 ```
@@ -596,16 +597,16 @@ oracle history --goal-id "$GOAL" --since-seq 0 \
 (§8.4 shows how an LLM front-end can make this review faster without taking
 the decision away from you.)
 
-### 6.3 Observations: telling the oracle what you know
+### 6.3 Observations: telling the wayfinder what you know
 
-Observations are how new facts enter the oracle's world — things you did
+Observations are how new facts enter the wayfinder's world — things you did
 outside the loop, things you noticed, artifacts you produced. By default an
-observation invalidates the open recommendation (the oracle should rethink);
+observation invalidates the open recommendation (the wayfinder should rethink);
 set `invalidates_open_recommendations: false` for purely informational notes.
 
 ```json
 {
-  "schema": "oip.update/0.1",
+  "schema": "wip.update/0.1",
   "protocol_version": "0.1",
   "update_id": "upd_obs_01",
   "goal_id": "goal_01",
@@ -633,13 +634,13 @@ set `invalidates_open_recommendations: false` for purely informational notes.
 ```
 
 Observation kinds: `fact` (subject/predicate/object triple), `diagnostic`
-(free-form statement), `artifact` (an `oip.artifact/0.1` reference), and
-`message` (text for a `human` or `oracle` audience).
+(free-form statement), `artifact` (a `wip.artifact/0.1` reference), and
+`message` (text for a `human` or `wayfinder` audience).
 
 ### 6.4 Corrections
 
-When the oracle believes something wrong, correct it — history is never
-edited; the correction is a new event the oracle must weigh:
+When the wayfinder believes something wrong, correct it — history is never
+edited; the correction is a new event the wayfinder must weigh:
 
 ```json
 {
@@ -657,12 +658,12 @@ edited; the correction is a new event the oracle must weigh:
 
 ### 6.5 Overrides: taking the wheel
 
-Overrides let a human reject, replace, force, or short-circuit the oracle's
+Overrides let a human reject, replace, force, or short-circuit the wayfinder's
 recommendation. The most useful one is `replace` — "no, run *this* instead":
 
 ```json
 {
-  "schema": "oip.update/0.1",
+  "schema": "wip.update/0.1",
   "protocol_version": "0.1",
   "update_id": "upd_override_01",
   "goal_id": "goal_01",
@@ -711,9 +712,9 @@ recommendation. The most useful one is `replace` — "no, run *this* instead":
 }
 ```
 
-You must supply the same risk and idempotency metadata the oracle would have —
+You must supply the same risk and idempotency metadata the wayfinder would have —
 the executor refuses replacements without it, and it applies the same policy
-checks as always (`force` bypasses the *oracle's* judgment, never the
+checks as always (`force` bypasses the *wayfinder's* judgment, never the
 executor's safety policy, unless local policy explicitly says otherwise).
 
 The full decision set: `reject`, `replace`, `defer`, `mark_done`,
@@ -725,7 +726,7 @@ The full decision set: `reject`, `replace`, `defer`, `mark_done`,
 
 ```json
 {
-  "schema": "oip.update/0.1",
+  "schema": "wip.update/0.1",
   "protocol_version": "0.1",
   "update_id": "upd_cancel_01",
   "goal_id": "goal_01",
@@ -736,20 +737,20 @@ The full decision set: `reject`, `replace`, `defer`, `mark_done`,
 }
 ```
 
-After cancellation (or success/failure), `oracle next` refuses with
+After cancellation (or success/failure), `wayfinder next` refuses with
 `invalid_input` — terminal goals stay terminal.
 
 ---
 
 ## 7. Wrapping other command-line tools
 
-Every command-line tool can be driven through the oracle protocol via a
-wrapper. `oracle-wrap <tool>` presents an OIP-conformant oracle whose expertise
+Every command-line tool can be driven through the wayfinder protocol via a
+wrapper. `wayfinder-wrap <tool>` presents a WIP-conformant wayfinder whose expertise
 is that one tool: you give it a goal in plain language, it issues concrete,
 fully-specified invocations of the tool as `shell` actions, and it interprets
 the results.
 
-The wrapped oracle speaks exactly the same CLI, so everything in this guide
+The wrapped wayfinder speaks exactly the same CLI, so everything in this guide
 applies unchanged — same commands, same event log, same executor.
 
 ### 7.1 Example: ffmpeg without remembering ffmpeg flags
@@ -757,9 +758,9 @@ applies unchanged — same commands, same event log, same executor.
 ```bash
 mkdir -p /work/media && cd /work/media
 
-oracle-wrap ffmpeg goal create <<'EOF'
+wayfinder-wrap ffmpeg goal create <<'EOF'
 {
-  "schema": "oip.goal_create/0.1",
+  "schema": "wip.goal_create/0.1",
   "protocol_version": "0.1",
   "create_id": "create_transcode_01",
   "created_at": "2026-07-04T20:00:00Z",
@@ -769,13 +770,13 @@ oracle-wrap ffmpeg goal create <<'EOF'
 }
 EOF
 
-# Let the executor drive the wrapped oracle
-oracle-exec run --oracle "oracle-wrap ffmpeg" --goal-id goal_media_01
+# Let the executor drive the wrapped wayfinder
+wayfinder-exec run --wayfinder "wayfinder-wrap ffmpeg" --goal-id goal_media_01
 ```
 
 The wrapper's recommendation is an ordinary `shell` action —
 `argv: ["ffmpeg", "-i", "input.mov", ...]` — subject to the same review,
-policy, and audit trail as anything else. `oracle history` shows you exactly
+policy, and audit trail as anything else. `wayfinder history` shows you exactly
 which ffmpeg invocations ran and what they produced.
 
 ### 7.2 Example: tools that make remote requests
@@ -784,9 +785,9 @@ Wrappers work for network tools too — `curl`, `gh`, `aws`, `kubectl`, anything
 The difference is entirely in risk metadata and policy, not mechanics:
 
 ```bash
-oracle-wrap curl goal create <<'EOF'
+wayfinder-wrap curl goal create <<'EOF'
 {
-  "schema": "oip.goal_create/0.1",
+  "schema": "wip.goal_create/0.1",
   "protocol_version": "0.1",
   "create_id": "create_fetch_status_01",
   "created_at": "2026-07-04T20:10:00Z",
@@ -837,21 +838,21 @@ never appear in commands, logs, or events. (Key management: security document.)
 Everything so far has you (or the executor) reading and writing JSON. A prose
 front-end puts an LLM between you and that JSON: you type ordinary — but
 precise — English, and the front-end composes the protocol traffic.
-`oracle-do`, `oracle-tell`, `oracle-ask`, and `oracle-chat` are illustrative
-names, like `oracle-exec`.
+`wayfinder-do`, `wayfinder-tell`, `wayfinder-ask`, and `wayfinder-chat` are illustrative
+names, like `wayfinder-exec`.
 
 Three facts keep this from being magic:
 
-1. **The front-end is on your side of the boundary, not the oracle's.** It is
+1. **The front-end is on your side of the boundary, not the wayfinder's.** It is
    just another actor speaking the same protocol: it composes
-   `oip.goal_create` and `oip.update` documents, calls `oracle` and
-   `oracle-exec`, and does the bookkeeping that makes hand-written updates
+   `wip.goal_create` and `wip.update` documents, calls `wayfinder` and
+   `wayfinder-exec`, and does the bookkeeping that makes hand-written updates
    tedious (`update_id`s, `issued_event_seq`/`event_hash`, timestamps). It has
    no special powers — executor policy gates it exactly as it gates you.
 2. **Prose goes in, structure comes out, and only the structure is real.**
    Your sentence is translated into structured fields, and those fields are
    what runs and what the log records. The convenience costs nothing in
-   auditability: `oracle history` shows exactly what was submitted on your
+   auditability: `wayfinder history` shows exactly what was submitted on your
    behalf, byte for byte.
 3. **Submitted immediately, audited after.** These front-ends do not stop to
    show you the derived JSON before sending it — the guardrails that matter
@@ -861,14 +862,14 @@ Three facts keep this from being magic:
    front-end is a legitimate alternative configuration; it changes the feel,
    not the protocol.
 
-### 8.1 Goals from a sentence: oracle-do
+### 8.1 Goals from a sentence: wayfinder-do
 
 ```bash
-oracle-do "Make the tests in /home/curt/project pass. Don't modify anything
+wayfinder-do "Make the tests in /home/curt/project pass. Don't modify anything
 outside the repo, and don't auto-run anything above low risk."
 ```
 
-The front-end composes the `oip.goal_create` document — the intent becomes
+The front-end composes the `wip.goal_create` document — the intent becomes
 `description`, the named path becomes an absolute `workspace_uri`, and the
 risk limit becomes `policy.max_auto_risk_level: "low"` — then runs the
 executor loop and narrates:
@@ -883,12 +884,12 @@ goal_01 succeeded  (4 recommendations, 2m40s)
 ```
 
 Notice the split it made. "Make the tests pass" is advisory prose in
-`description`, shaping what the oracle recommends. "Nothing above low risk" is
+`description`, shaping what the wayfinder recommends. "Nothing above low risk" is
 a hard limit, so it belongs in `policy`, where it is enforced mechanically.
 When your prose contains a hard limit, verify it landed in a structured field:
 
 ```bash
-oracle history --goal-id goal_01 --since-seq 0 \
+wayfinder history --goal-id goal_01 --since-seq 0 \
   | jq 'select(.type=="goal.created") | .data.goal | {description, policy}'
 ```
 
@@ -897,7 +898,7 @@ JSON boilerplate gone:
 
 ```bash
 cd /work/media
-oracle-do --oracle "oracle-wrap ffmpeg" \
+wayfinder-do --wayfinder "wayfinder-wrap ffmpeg" \
   "Convert every .mov in this directory to a 1080p H.264 .mp4 with the same
    basename. Skip any that already have an .mp4. Keep the originals."
 ```
@@ -907,7 +908,7 @@ naming, "skip any that already have" makes reruns cheap, "keep the originals"
 rules out cleanup-happy recommendations. That is what "ordinary albeit
 precise" means in practice.
 
-### 8.2 Prose in, updates out: oracle-tell
+### 8.2 Prose in, updates out: wayfinder-tell
 
 One command for everything in §6. It reads the goal's current state (open
 recommendation, open question), classifies your sentence into the right
@@ -915,32 +916,32 @@ recommendation, open question), classifies your sentence into the right
 
 ```bash
 # Open question was "npm or pnpm?"          -> question_answer
-oracle-tell --goal-id "$GOAL" "pnpm"
+wayfinder-tell --goal-id "$GOAL" "pnpm"
 
 # Something you did outside the loop        -> observation (invalidates open rec)
-oracle-tell --goal-id "$GOAL" "I bumped the version in package.json to 2.4.0 by hand just now."
+wayfinder-tell --goal-id "$GOAL" "I bumped the version in package.json to 2.4.0 by hand just now."
 
 # Purely informational                      -> observation, invalidates_open_recommendations: false
-oracle-tell --goal-id "$GOAL" "FYI, CI is red on main for unrelated reasons — this doesn't change what you should do next."
+wayfinder-tell --goal-id "$GOAL" "FYI, CI is red on main for unrelated reasons — this doesn't change what you should do next."
 
-# The oracle believes something wrong       -> correction
-oracle-tell --goal-id "$GOAL" "That parser test isn't failing because of our change; it fails on a clean checkout too."
+# The wayfinder believes something wrong       -> correction
+wayfinder-tell --goal-id "$GOAL" "That parser test isn't failing because of our change; it fails on a clean checkout too."
 
 # "No, run this instead"                    -> override.replace, metadata drafted for you
-oracle-tell --goal-id "$GOAL" "Don't use npm test — this repo uses pnpm, run pnpm test instead."
+wayfinder-tell --goal-id "$GOAL" "Don't use npm test — this repo uses pnpm, run pnpm test instead."
 ```
 
 Each invocation prints one line saying what it recorded:
 
 ```text
-recorded observation upd_9f2c1a (invalidates rec_06; the oracle will rethink)
+recorded observation upd_9f2c1a (invalidates rec_06; the wayfinder will rethink)
 ```
 
 The audit reflex, since nothing was shown before submission — read back what
 was actually said on your behalf:
 
 ```bash
-oracle history --goal-id "$GOAL" --since-seq 0 | tail -2 | jq -c '{seq, type, data}'
+wayfinder history --goal-id "$GOAL" --since-seq 0 | tail -2 | jq -c '{seq, type, data}'
 ```
 
 Notes that matter:
@@ -948,7 +949,7 @@ Notes that matter:
 - The front-end infers invalidation intent from wording ("FYI", "for context"
   vs. "I changed…"). When the difference matters, say it explicitly, as in the
   third example.
-- Authority is not negotiable in prose. `oracle-tell "cancel this goal,
+- Authority is not negotiable in prose. `wayfinder-tell "cancel this goal,
   requirements changed"` composes a perfectly good `goal_cancel`, but it lands
   only if you are an authenticated `owner`/`policy_admin` — a front-end cannot
   manufacture authority (§13).
@@ -958,13 +959,13 @@ Notes that matter:
   a drafted `risk.level: "low"` on something that touches the network still
   gets stopped.
 
-### 8.3 Questions about the goal: oracle-ask
+### 8.3 Questions about the goal: wayfinder-ask
 
-Pure reads. `oracle-ask` synthesizes an answer from `status`, `history`,
+Pure reads. `wayfinder-ask` synthesizes an answer from `status`, `history`,
 `explain`, and `verify` — it never appends events.
 
 ```bash
-oracle-ask --goal-id "$GOAL" "why is this stuck?"
+wayfinder-ask --goal-id "$GOAL" "why is this stuck?"
 ```
 
 ```text
@@ -976,10 +977,10 @@ Your options: approve rec_04, run it yourself and report, or reject it with a re
 ```
 
 ```bash
-oracle-ask --goal-id "$GOAL" "what has actually changed on disk so far?"
-oracle-ask --goal-id "$GOAL" "summarize the last hour as a timeline"
-oracle-ask --goal-id "$GOAL" "did anything fail, and was it retried?"
-oracle-ask "which of my goals are waiting on me right now?"     # store-wide
+wayfinder-ask --goal-id "$GOAL" "what has actually changed on disk so far?"
+wayfinder-ask --goal-id "$GOAL" "summarize the last hour as a timeline"
+wayfinder-ask --goal-id "$GOAL" "did anything fail, and was it retried?"
+wayfinder-ask "which of my goals are waiting on me right now?"     # store-wide
 ```
 
 Answers cite event `seq` numbers so every claim is checkable. The standing
@@ -992,7 +993,7 @@ The hard rule (§13) is: review `argv`, not prose. An LLM does not change who
 decides — it changes how fast you can understand what you are deciding about.
 
 ```bash
-oracle-ask --goal-id "$GOAL" --recommendation rec_04 \
+wayfinder-ask --goal-id "$GOAL" --recommendation rec_04 \
   "walk me through exactly what this will do and what the worst case is"
 ```
 
@@ -1014,7 +1015,7 @@ Before approving, check: git remote get-url origin; read notes.md.
 Then the decision is yours — in prose, if you like:
 
 ```bash
-oracle-tell --goal-id "$GOAL" "approve rec_04 — I read the argv and notes.md; publishing is intended."
+wayfinder-tell --goal-id "$GOAL" "approve rec_04 — I read the argv and notes.md; publishing is intended."
 ```
 
 That becomes an `approval` update with `decision: "granted"` and your sentence
@@ -1025,14 +1026,14 @@ in every review precisely so that you have seen it. If the explanation and the
 `argv` ever seem to disagree, the `argv` is the truth and the explanation is a
 bug.
 
-### 8.5 Interactive: oracle-chat
+### 8.5 Interactive: wayfinder-chat
 
 The same verbs, held in a conversation with context. Every turn is ordinary
 protocol traffic underneath — the transcript is a view; the event log is the
 record.
 
 ```text
-$ oracle-chat --goal-id goal_rel_01
+$ wayfinder-chat --goal-id goal_rel_01
 chat: goal_rel_01 is blocked — rec_04 needs approval
       (gh release create v2.4.0; network_write, irreversible).
 
@@ -1065,18 +1066,18 @@ changes that, however conversational the surface.
 
 - **Precision is still your job.** "Clean up the old releases" and "delete
   releases older than v2.0.0, keeping the latest three" are different goals.
-  Ambiguous prose costs a round-trip — the front-end asks, or the oracle
+  Ambiguous prose costs a round-trip — the front-end asks, or the wayfinder
   issues a `question` recommendation.
 - **Hard limits go in structured fields.** Prose in `description` shapes the
-  oracle's recommendations; it does not bind them. If you say "never touch
-  prod", also make sure it is policy — `oracle-do` maps limit-shaped phrases
+  wayfinder's recommendations; it does not bind them. If you say "never touch
+  prod", also make sure it is policy — `wayfinder-do` maps limit-shaped phrases
   to `policy`, and §8.1 shows how to verify that it did.
 - **Keep an audit rhythm.** End a prose session with
-  `oracle-ask "what was submitted on my behalf today?"` — or go straight to
-  `oracle history | jq` if you would rather not have the LLM grade its own
+  `wayfinder-ask "what was submitted on my behalf today?"` — or go straight to
+  `wayfinder history | jq` if you would rather not have the LLM grade its own
   homework.
 - **Corrections, not edits.** A mistranslated update is repaired the protocol
-  way: `oracle-tell --goal-id "$GOAL" "that last observation is wrong — I
+  way: `wayfinder-tell --goal-id "$GOAL" "that last observation is wrong — I
   bumped the version to 2.4.1, not 2.4.0"` appends a correction event; the
   original stays in the log, as always.
 - **The floor does not move.** No phrasing — yours or the front-end's — makes
@@ -1087,30 +1088,30 @@ changes that, however conversational the surface.
 
 ## 9. Under the hood: ten machines, one protocol
 
-Nothing in this guide depends on *how* the oracle thinks or *how* the executor
+Nothing in this guide depends on *how* the wayfinder thinks or *how* the executor
 runs things. Those are the two replaceable black boxes; the protocol between
 them is the fixed part. This section makes that concrete with ten very
 different implementations — a to-do list, a classical planner, build graphs,
 issue trackers, a behavior tree, a workflow engine, configuration management,
 terminal automation, a coding agent, and a remote browser. All tool names are
-illustrative, like `oracle-exec`. You drive every one of them with exactly the
-commands you already know; what changes is what `oracle next` is doing when it
+illustrative, like `wayfinder-exec`. You drive every one of them with exactly the
+commands you already know; what changes is what `wayfinder next` is doing when it
 decides, and what the executor is doing when it runs.
 
 The recurring pattern to notice: the technology supplies the *judgment* or the
 *muscle*, and the protocol supplies everything you have relied on so far — the
 log, the leases, the approvals, argv-is-law.
 
-### 9.1 Taskwarrior: urgency math as the oracle
+### 9.1 Taskwarrior: urgency math as the wayfinder
 
-An oracle does not have to be clever to be useful. `oracle-tw` keeps a
+A wayfinder does not have to be clever to be useful. `wayfinder-tw` keeps a
 Taskwarrior database per goal: creating the goal seeds tasks (with due dates,
-priorities, and `depends:` edges parsed from your prose), and `oracle next` is
+priorities, and `depends:` edges parsed from your prose), and `wayfinder next` is
 little more than `task ready limit:1` — Taskwarrior's own urgency calculation
 over priority, deadlines, dependencies, and age picks the step.
 
 ```bash
-oracle-do --oracle oracle-tw "Prepare the quarterly compliance evidence:
+wayfinder-do --wayfinder wayfinder-tw "Prepare the quarterly compliance evidence:
 export the access logs, run the audit script on them, and file the report by
 Friday. The audit script can't run until the export exists."
 ```
@@ -1125,31 +1126,31 @@ rec_03  file the report         due:friday, urgency 9.4  needs approval (network
 Tasks whose annotations carry an `argv` become `shell` actions; tasks with no
 runnable annotation surface as `question` recommendations for a human to
 handle. `action_result` completes tasks, observations add or modify them, and
-`oracle explain` prints the urgency arithmetic. The `depends:` edge is why
+`wayfinder explain` prints the urgency arithmetic. The `depends:` edge is why
 rec_02 waited for rec_01 — decades of to-do-list pragmatics doing the
 scheduling, with the event log and executor policy unchanged around it.
 
 ### 9.2 A PDDL planner: next steps you can prove
 
-`oracle-plan` compiles the goal into a PDDL problem against a domain file
-written by whoever operates the oracle, runs a classical planner (Fast
+`wayfinder-plan` compiles the goal into a PDDL problem against a domain file
+written by whoever operates the wayfinder, runs a classical planner (Fast
 Downward, for instance), and then deals the resulting plan out one step per
-`oracle next`.
+`wayfinder next`.
 
 ```bash
-oracle-do --oracle "oracle-plan --domain cluster-maintenance.pddl" \
+wayfinder-do --wayfinder "wayfinder-plan --domain cluster-maintenance.pddl" \
   "Upgrade node3 to kernel 6.9 without ever having fewer than two nodes serving."
 ```
 
 The "never fewer than two serving" clause does not stay prose: it becomes an
-invariant in the planner's model, so every plan the oracle can issue maintains
+invariant in the planner's model, so every plan the wayfinder can issue maintains
 it by construction — drain node3 only after node4 is back in rotation, and so
-on. `oracle explain` returns the plan with each step's preconditions. When an
+on. `wayfinder explain` returns the plan with each step's preconditions. When an
 action fails, or an observation contradicts the model ("node4 is actually down
-for a disk swap"), the oracle replans from the new state and the next
+for a disk swap"), the wayfinder replans from the new state and the next
 recommendation comes from the new plan.
 
-The trade is explicit: this oracle cannot improvise. Prose that does not map
+The trade is explicit: this wayfinder cannot improvise. Prose that does not map
 onto domain predicates gets a `question` or a `blocked` recommendation rather
 than a guess. For goals where "provably reaches the goal in the model" beats
 "plausibly helpful", that rigidity is the feature.
@@ -1157,18 +1158,18 @@ than a guess. For goals where "provably reaches the goal in the model" beats
 ### 9.3 Make, Bazel, Ninja: the dependency graph decides
 
 "What should happen next" is the question a build system answers on every run,
-so `oracle-make` barely has to think: the goal is "this target is up to date",
-`oracle next` walks the out-of-date subgraph and issues the first ready recipe
+so `wayfinder-make` barely has to think: the goal is "this target is up to date",
+`wayfinder next` walks the out-of-date subgraph and issues the first ready recipe
 as a `shell` action, a `completed` result marks the node fresh, and the goal is
 done when nothing is stale.
 
 ```bash
-oracle-do --oracle "oracle-make dist/report.pdf" \
+wayfinder-do --wayfinder "wayfinder-make dist/report.pdf" \
   "Bring the quarterly report up to date."
 ```
 
 Preview mode maps to a dry run (`make -n`, `ninja -n`, `bazel build --nobuild`)
-— the oracle can always show you the remaining work without running any of it.
+— the wayfinder can always show you the remaining work without running any of it.
 An observation that a source file changed dirties that node and everything
 downstream, which is exactly the staleness semantics of §3.1 expressed as
 mtimes. Bazel and Ninja give the same shape with better graphs; Bazel's
@@ -1178,14 +1179,14 @@ hermetic, sandboxed actions pair especially honestly with risk metadata, since
 ### 9.4 GitHub Issues, Jira, Linear: the goal your team can see
 
 Here the tracker is not the brain — it is a live mirror, so people without a
-shell can participate. A bridge process (`oracle-bridge gh`, say) maps goal
+shell can participate. A bridge process (`wayfinder-bridge gh`, say) maps goal
 events onto an issue as they append: `goal.created` opens the issue, each
 issued recommendation is a comment, `needs` entries become labels, and
 `goal.completed` closes it. Traffic flows the other way too: a comment from an
 authorized teammate becomes an `approval` or `observation` update.
 
 ```text
-#412  Rotate the staging TLS certificates              [oracle:goal_cert_01]
+#412  Rotate the staging TLS certificates              [wayfinder:goal_cert_01]
   bot>    rec_03 wants to run: certbot renew --cert-name staging.acme.dev
           risk: network_write, requires approval           +label needs-approval
   jsmith> approved — renewal window confirmed with the platform team
@@ -1203,13 +1204,13 @@ the same design with a different API underneath.
 ### 9.5 A behavior tree engine: standing goals that never finish
 
 Some goals are not "reach a state" but "keep a state" — the shape behavior
-trees were built for. `oracle-bt` ticks a tree against a blackboard hydrated
+trees were built for. `wayfinder-bt` ticks a tree against a blackboard hydrated
 from the event log: condition nodes read recent observations and action
 results, action leaves emit `action` recommendations, and a node still in
 progress comes back as `wait`.
 
 ```bash
-oracle-do --oracle "oracle-bt --tree staging-health.bt" \
+wayfinder-do --wayfinder "wayfinder-bt --tree staging-health.bt" \
   "Keep the staging environment healthy until further notice."
 ```
 
@@ -1232,34 +1233,34 @@ systems can say.
 
 Everything in §4 about the dumb executor's crash behavior — report before
 re-execute, replay updates with the same `update_id` — is a durability
-contract, and durability contracts are what Temporal sells. `oracle-exec` can
+contract, and durability contracts are what Temporal sells. `wayfinder-exec` can
 be implemented as a Temporal workflow: each issue/accept/execute/report cycle
 is a set of activities, timeouts and retries map onto Temporal's primitives,
 and workflow state carries the `update_id`s.
 
 ```bash
-oracle-exec-temporal run --goal-id "$GOAL"    # same loop, durable
+wayfinder-exec-temporal run --goal-id "$GOAL"    # same loop, durable
 ```
 
 Kill the worker mid-`make test` and the replacement resumes the workflow,
 checks whether the command completed, and submits the pending `action_result`
-with byte-identical content — the oracle answers `"replayed": true` if the
+with byte-identical content — the wayfinder answers `"replayed": true` if the
 original landed, and nothing runs twice. The §3.1 rule "once started, always
 reportable" stops being a discipline you maintain and becomes a property the
 engine enforces.
 
 One caution: this setup has two histories. Temporal's workflow history is
-machinery — private, replayable, disposable. The `.oracle` event log is the
-record. `oracle verify` audits the one that matters.
+machinery — private, replayable, disposable. The `.wayfinder` event log is the
+record. `wayfinder verify` audits the one that matters.
 
 ### 9.7 Ansible: idempotency as the native tongue
 
-`oracle-wrap ansible` (§7 mechanics, unchanged) issues `ansible-playbook`
+`wayfinder-wrap ansible` (§7 mechanics, unchanged) issues `ansible-playbook`
 invocations — and the fit is unusually good, because Ansible already speaks
 this guide's dialect. Check mode is preview:
 
 ```bash
-oracle-do --oracle "oracle-wrap ansible" \
+wayfinder-do --wayfinder "wayfinder-wrap ansible" \
   "Make sure the three web hosts in inventory/prod.ini run nginx 1.26 with
    the hardened config and logrotate. Show me what would change first."
 ```
@@ -1304,35 +1305,35 @@ redacted before it is hashed and submitted, per §13's rules.
 ### 9.9 Codex: a coding agent with the hands taken off
 
 An agentic coding tool normally proposes commands *and runs them*.
-`oracle-codex` keeps the judgment and removes the hands: the agent session is
+`wayfinder-codex` keeps the judgment and removes the hands: the agent session is
 hydrated from the event log, and every command the agent tries to execute is
 intercepted and issued as an `action` recommendation instead. The
 `action_result` you (or the executor) report back is fed to the agent as if
 its tool call had run.
 
 ```bash
-oracle-do --oracle oracle-codex \
+wayfinder-do --wayfinder wayfinder-codex \
   "Find and fix the memory leak the soak test keeps hitting."
 ```
 
-The effect is frontier-model judgment under OIP execution discipline. The
+The effect is frontier-model judgment under WIP execution discipline. The
 agent literally cannot touch the system — its proposals become `argv` that
 policy gates, humans approve, and the log records, like anything else. Its
-stated reasoning surfaces through `oracle explain`.
+stated reasoning surfaces through `wayfinder explain`.
 
 Note the symmetry with §8: there, the LLM sits on *your* side of the boundary,
-turning prose into protocol traffic; here it sits inside the oracle box,
-deciding what to recommend. The two compose — `oracle-do` in front,
-`oracle-codex` behind — and the protocol between them is what keeps either
+turning prose into protocol traffic; here it sits inside the wayfinder box,
+deciding what to recommend. The two compose — `wayfinder-do` in front,
+`wayfinder-codex` behind — and the protocol between them is what keeps either
 LLM from quietly exceeding its station.
 
 ### 9.10 Browserbase: actions that click instead of exec
 
-For tasks whose only interface is a web page, `oracle-web` issues actions that
+For tasks whose only interface is a web page, `wayfinder-web` issues actions that
 drive a remote browser session on Browserbase:
 
 ```bash
-oracle-do --oracle oracle-web \
+wayfinder-do --wayfinder wayfinder-web \
   "Download June's invoice PDF from the vendor billing portal into ./invoices."
 ```
 
@@ -1364,34 +1365,34 @@ audit trail — identical.
 
 ---
 
-## 10. Deference: oracles delegating to oracles
+## 10. Deference: wayfinders delegating to wayfinders
 
-An oracle can defer parts of a goal to other oracles — other instances of
-itself, or wrapped tools — using the same protocol. Because an oracle can never
+A wayfinder can defer parts of a goal to other wayfinders — other instances of
+itself, or wrapped tools — using the same protocol. Because a wayfinder can never
 execute anything (invariant 1), deference is visible and mediated by the
-executor: **the parent oracle recommends actions that drive a sub-oracle, and
+executor: **the parent wayfinder recommends actions that drive a sub-wayfinder, and
 the executor runs those like any other action.** Delegation is just more
 `argv`.
 
 ### 10.1 What it looks like
 
-Say the parent goal is "cut and publish release 2.4.0". The parent oracle
+Say the parent goal is "cut and publish release 2.4.0". The parent wayfinder
 knows the release notes step is really a `git` problem and the publish step is
 really a `gh` problem. Its recommendations come out like:
 
 ```json
 {
   "recommendation_type": "action",
-  "summary": "Delegate changelog generation to the git wrapper oracle.",
+  "summary": "Delegate changelog generation to the git wrapper wayfinder.",
   "action": {
     "action_id": "act_delegate_git_01",
     "kind": "shell",
     "title": "Run sub-goal: generate changelog since v2.3.0",
     "shell": {
       "argv": [
-        "oracle-exec", "run",
-        "--oracle", "oracle-wrap git",
-        "--store", "/work/release/.oracle-sub/git",
+        "wayfinder-exec", "run",
+        "--wayfinder", "wayfinder-wrap git",
+        "--store", "/work/release/.wayfinder-sub/git",
         "--goal-file", "subgoals/changelog.json"
       ],
       "cwd": "file:/work/release",
@@ -1409,28 +1410,28 @@ really a `gh` problem. Its recommendations come out like:
 
 From the executor's point of view this is one opaque command with one exit
 code — it neither knows nor cares that the command is itself an
-oracle/executor loop. The sub-goal gets its own store, its own event log, its
+wayfinder/executor loop. The sub-goal gets its own store, its own event log, its
 own recommendations and actions, all independently auditable:
 
 ```bash
 # The parent's log shows the delegation as a single action
-oracle history --goal-id goal_release_01 --since-seq 0 | jq -c '{seq, type}'
+wayfinder history --goal-id goal_release_01 --since-seq 0 | jq -c '{seq, type}'
 
 # The sub-goal's log shows what the git wrapper actually did
-oracle --store /work/release/.oracle-sub/git \
+wayfinder --store /work/release/.wayfinder-sub/git \
   history --goal-id goal_git_01 --since-seq 0 | jq -c '{seq, type}'
 ```
 
 Results flow back the ordinary way: the sub-run's output/artifacts land in the
-parent's `action_result`, and the parent oracle reasons over them to pick its
+parent's `action_result`, and the parent wayfinder reasons over them to pick its
 next step.
 
 ### 10.2 Rules of thumb for delegation
 
 - **Risk composes.** A delegated sub-goal's action inherits the risk of what
-  the sub-oracle might do. A well-behaved parent declares the sub-goal's real
+  the sub-wayfinder might do. A well-behaved parent declares the sub-goal's real
   risk envelope (a `gh` publish sub-goal is `network_write` even though
-  `argv[0]` is `oracle-exec`). Policy on the *sub*-executor still applies
+  `argv[0]` is `wayfinder-exec`). Policy on the *sub*-executor still applies
   independently — the inner loop enforces its own approvals, so a sneaky or
   sloppy parent cannot launder a dangerous action through delegation.
 - **Timeouts bound the whole sub-run.** `timeout_seconds` on the delegating
@@ -1438,10 +1439,10 @@ next step.
 - **One level at a time when debugging.** If a delegated action fails, read
   the sub-store's history first — the parent only sees the summary that came
   back.
-- **Deep composition works** — a sub-oracle can itself delegate — but each
+- **Deep composition works** — a sub-wayfinder can itself delegate — but each
   level adds a store, a policy surface, and a place to look when things go
   wrong. Prefer shallow trees.
-- The oracle may also consult other oracles *privately* while thinking (its
+- The wayfinder may also consult other wayfinders *privately* while thinking (its
   internal state is out of scope). You will see the effects only in
   `explanation.evidence`. Anything that touches the world, though, must
   surface as a recommendation and go through an executor.
@@ -1451,16 +1452,16 @@ next step.
 ## 11. Artifacts: large and binary outputs
 
 Command output up to the inline limit (see
-`oracle capabilities | jq '.result.limits'`) rides inside `action_result.output`.
+`wayfinder capabilities | jq '.result.limits'`) rides inside `action_result.output`.
 Anything larger is stored as a content-addressed **artifact** under
-`.oracle/goals/<goal_id>/artifacts/sha256/…` and referenced from events:
+`.wayfinder/goals/<goal_id>/artifacts/sha256/…` and referenced from events:
 
 ```json
 {
-  "schema": "oip.artifact/0.1",
+  "schema": "wip.artifact/0.1",
   "protocol_version": "0.1",
   "artifact_id": "art_01",
-  "uri": "file:.oracle/goals/goal_01/artifacts/sha256/ab/abc123...",
+  "uri": "file:.wayfinder/goals/goal_01/artifacts/sha256/ab/abc123...",
   "media_type": "text/plain",
   "sha256": "sha256:abc123...",
   "bytes": 15322,
@@ -1472,13 +1473,13 @@ Anything larger is stored as a content-addressed **artifact** under
 To read one, resolve the relative URI against the workspace root:
 
 ```bash
-less /home/curt/project/.oracle/goals/goal_01/artifacts/sha256/ab/abc123...
+less /home/curt/project/.wayfinder/goals/goal_01/artifacts/sha256/ab/abc123...
 ```
 
 The executor handles storage, hashing, and truncation automatically. If you
 report results by hand and the output is big, store the file at its content
 address, verify the digest (`shasum -a 256`), and reference it in
-`action_result.artifacts` — the oracle re-verifies the digest before accepting.
+`action_result.artifacts` — the wayfinder re-verifies the digest before accepting.
 If an artifact captured a secret, use a `redaction` update with a
 `replacement_artifact` to genuinely replace its bytes; event payloads, by
 contrast, can never be truly redacted, which is why secrets must never enter
@@ -1495,13 +1496,13 @@ the exit code.
 |---|---|---|
 | `invalid_input` | Malformed/ill-formed request, unknown ID, reused idempotency key with different content, `next` on a terminal goal. | Fix the request. Check required fields against the spec. |
 | `storage_conflict` | Open recommendation already exists; lease claimed by another actor; append lock contention. | For issuance: dispose or `--supersede`. For claims: someone else owns the action — leave it. For locks: retry. |
-| `stale_recommendation` | The world changed after issuance; execution refused. | `oracle next --mode=issue` for a fresh one. |
+| `stale_recommendation` | The world changed after issuance; execution refused. | `wayfinder next --mode=issue` for a fresh one. |
 | `policy_denied` | Actor lacks authority, or executor policy refused the action. | Check `actor.authority`/authentication; grant an approval; or run manually. |
 | `temporary_failure` | Transient; `retryable: true`, honor `retry_after_seconds`. | Retry the same request (same `update_id`/`create_id` — replays are safe). |
-| `unsupported_capability` | Feature/enum this oracle doesn't support, or events from a newer protocol version. | Check `oracle capabilities`; upgrade or avoid the feature. |
-| `corrupt_event_log` | Hash chain broken, seq gap, truncated line. | Stop automation. `oracle verify`. Recover out-of-band per the spec. |
+| `unsupported_capability` | Feature/enum this wayfinder doesn't support, or events from a newer protocol version. | Check `wayfinder capabilities`; upgrade or avoid the feature. |
+| `corrupt_event_log` | Hash chain broken, seq gap, truncated line. | Stop automation. `wayfinder verify`. Recover out-of-band per the spec. |
 | `artifact_integrity_failed` | Artifact bytes don't match their digest. | Re-store the artifact; never reference unverified content. |
-| `internal_error` | Oracle bug. | Report it; the log is still your source of truth. |
+| `internal_error` | Wayfinder bug. | Report it; the log is still your source of truth. |
 
 General habits that keep you out of trouble:
 
@@ -1512,7 +1513,7 @@ General habits that keep you out of trouble:
 - **Use `--request-id`** on scripted calls so you can correlate responses in
   your own logs.
 - **Don't parse stderr.** Ever. Protocol state is stdout JSON only.
-- **Trust the log over your memory.** `oracle history` is canonical; if your
+- **Trust the log over your memory.** `wayfinder history` is canonical; if your
   script's idea of state disagrees with a replay of the events, the events win.
 
 ---
@@ -1524,7 +1525,7 @@ configuration — lives in the separate security document. The five things every
 CLI user must internalize:
 
 1. **Review `argv`, not prose.** `summary`, `title`, and
-   `command_for_display` are oracle-controlled text and can misdescribe the
+   `command_for_display` are wayfinder-controlled text and can misdescribe the
    command. What runs is `argv` in `cwd`. Always.
 2. **Secrets never go in events.** No plaintext credentials in `env.set`
    (use `secret_ref`), never in `stdin.text`, and redact artifacts *before*
@@ -1549,35 +1550,35 @@ CLI user must internalize:
 
 ```bash
 # 1. Start
-GOAL=$(oracle goal create < goal.json | jq -r '.result.goal.goal_id')
+GOAL=$(wayfinder goal create < goal.json | jq -r '.result.goal.goal_id')
 
 # 2. Automate what's safe
-oracle-exec run --goal-id "$GOAL"
+wayfinder-exec run --goal-id "$GOAL"
 
 # 3. See why it stopped
-oracle status --goal-id "$GOAL" | jq '.result | {goal_status, reason_code, needs}'
+wayfinder status --goal-id "$GOAL" | jq '.result | {goal_status, reason_code, needs}'
 
 # 4. Unblock (whichever applies)
-oracle update --goal-id "$GOAL" < answer.json     # answer a question
-oracle update --goal-id "$GOAL" < approval.json   # approve a risky action
-oracle update --goal-id "$GOAL" < observation.json# tell it what you changed
+wayfinder update --goal-id "$GOAL" < answer.json     # answer a question
+wayfinder update --goal-id "$GOAL" < approval.json   # approve a risky action
+wayfinder update --goal-id "$GOAL" < observation.json# tell it what you changed
 
 # 5. Repeat 2-4 until:
-oracle status --goal-id "$GOAL" | jq -r '.result.goal_status'
+wayfinder status --goal-id "$GOAL" | jq -r '.result.goal_status'
 # succeeded
 
 # 6. Audit
-oracle verify  --goal-id "$GOAL" | jq '.result.ok'
-oracle history --goal-id "$GOAL" --since-seq 0 | jq -c '{seq, type, actor: .actor.id}'
+wayfinder verify  --goal-id "$GOAL" | jq '.result.ok'
+wayfinder history --goal-id "$GOAL" --since-seq 0 | jq -c '{seq, type, actor: .actor.id}'
 ```
 
 The same session in prose (§8) — identical protocol traffic underneath:
 
 ```bash
-oracle-do "Make the tests in /home/curt/project pass; nothing above low risk."  # 1-2
-oracle-ask  --goal-id "$GOAL" "why did it stop?"                                # 3
-oracle-tell --goal-id "$GOAL" "pnpm"                                            # 4 (whichever applies)
-oracle-tell --goal-id "$GOAL" "approve rec_04 — argv reviewed, intended"
-oracle-tell --goal-id "$GOAL" "I fixed the env var myself; try again"
-oracle-ask  --goal-id "$GOAL" "what was submitted on my behalf, and did we finish?"  # 5-6
+wayfinder-do "Make the tests in /home/curt/project pass; nothing above low risk."  # 1-2
+wayfinder-ask  --goal-id "$GOAL" "why did it stop?"                                # 3
+wayfinder-tell --goal-id "$GOAL" "pnpm"                                            # 4 (whichever applies)
+wayfinder-tell --goal-id "$GOAL" "approve rec_04 — argv reviewed, intended"
+wayfinder-tell --goal-id "$GOAL" "I fixed the env var myself; try again"
+wayfinder-ask  --goal-id "$GOAL" "what was submitted on my behalf, and did we finish?"  # 5-6
 ```
