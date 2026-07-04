@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import getpass
 import itertools
+import json
 import secrets
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -192,6 +193,33 @@ class WayfinderService:
     ) -> list[str]:
         goal_store = self._goal_store(goal_id, store=store)
         return goal_store.event_log.read_raw_lines_since(since_seq, limit=limit)
+
+    def history_page(
+        self,
+        goal_id: str,
+        *,
+        since_seq: int,
+        limit: int | None = None,
+        store: str | None = None,
+    ) -> dict[str, Any]:
+        """Return a paginated history result for JSON-RPC goal.history."""
+        max_page = int(build_capabilities()["limits"]["max_history_events_per_page"])
+        effective_limit = min(limit, max_page) if limit is not None else max_page
+        goal_store = self._goal_store(goal_id, store=store)
+        raw_lines = goal_store.event_log.read_raw_lines_since(
+            since_seq,
+            limit=effective_limit + 1,
+        )
+        truncated = len(raw_lines) > effective_limit
+        if truncated:
+            raw_lines = raw_lines[:effective_limit]
+        events = [json.loads(line) for line in raw_lines]
+        next_since = int(events[-1]["seq"]) if truncated and events else None
+        return {
+            "events": events,
+            "truncated": truncated,
+            "next_since_seq": next_since,
+        }
 
     def update(
         self,

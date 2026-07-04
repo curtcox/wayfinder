@@ -17,7 +17,7 @@ def build_capabilities(*, instance_id: str = "wayfinder_local") -> dict[str, Any
             "version": __version__,
             "instance_id": instance_id,
         },
-        "transports": ["cli"],
+        "transports": ["cli", "jsonrpc-stdio"],
         "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
         "recommendation_types": ["action", "question", "wait", "blocked", "done", "unsafe"],
         "action_kinds": ["shell", "noop"],

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import getpass
 import json
 import subprocess
 import sys
@@ -20,7 +21,7 @@ def _goal_create_payload(
         "protocol_version": "0.1",
         "create_id": create_id,
         "created_at": "2026-07-04T18:00:00Z",
-        "actor": {"type": "human", "id": "curt", "authority": "owner"},
+        "actor": {"type": "human", "id": getpass.getuser(), "authority": "owner"},
         "description": "Make the project tests pass.",
         "workspace_uri": f"file:{workspace}",
         "policy": {"max_auto_risk_level": "low"},

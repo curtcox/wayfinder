@@ -61,6 +61,64 @@
     },
     {
       "match": {
+        "completed_steps": 0,
+        "open_recommendation_id": {"$null": false}
+      },
+      "recommendation": {
+        "recommendation_type": "action",
+        "summary": "Run the project test suite.",
+        "goal_status": "running",
+        "confidence": 0.9,
+        "action": {
+          "kind": "shell",
+          "title": "Run tests",
+          "shell": {
+            "argv": ["make", "test"],
+            "command_for_display": "make test",
+            "cwd": "{workspace_uri}",
+            "env": {"mode": "minimal", "set": {}},
+            "stdin": {"mode": "none"},
+            "pty": false,
+            "timeout_seconds": 600,
+            "expected_exit_codes": [0],
+            "requires_shell": false
+          },
+          "preconditions": [],
+          "success_criteria": [
+            {"id": "succ_01", "kind": "exit_code", "operator": "in", "value": [0]}
+          ]
+        },
+        "idempotency": {
+          "level": "strong",
+          "key": "idem_{goal_id}_make_test",
+          "scope": "workspace",
+          "safe_to_retry": true,
+          "safe_to_run_if_already_done": true,
+          "detects_noop": false,
+          "dedupe_strategy": "idempotency_key",
+          "partial_failure_recovery": "retry",
+          "max_attempts": 2
+        },
+        "risk": {
+          "level": "low",
+          "classes": ["read_local", "execute_local"],
+          "blast_radius": "workspace",
+          "requires_approval": false,
+          "destructive": false,
+          "network": "not_required",
+          "secrets": "not_required",
+          "rollback": {"available": false, "kind": "unknown", "instructions": null}
+        },
+        "explanation": {
+          "mode": "structured",
+          "summary": "The next useful step is to run the test suite.",
+          "evidence": [],
+          "redactions": []
+        }
+      }
+    },
+    {
+      "match": {
         "goal_status": "running",
         "completed_steps": {"$gte": 1},
         "open_recommendation_id": {"$null": true}

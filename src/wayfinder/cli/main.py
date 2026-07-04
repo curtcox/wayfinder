@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from wayfinder.brains.scripted import ScriptedBrain
+from wayfinder.cli.jsonrpc import run_jsonrpc_server
 from wayfinder.cli.responses import map_exception, success_response, write_json, write_jsonl_lines
 from wayfinder.cli.service import WayfinderService
 from wayfinder.core.errors import InvalidInputError
@@ -31,8 +32,13 @@ def _build_parser() -> argparse.ArgumentParser:
         "--brain-playbook",
         help="JSON playbook path for the scripted brain",
     )
+    parser.add_argument(
+        "--jsonrpc-stdio",
+        action="store_true",
+        help="Run as a JSON-RPC 2.0 server on stdin/stdout (§1.5)",
+    )
 
-    subparsers = parser.add_subparsers(dest="command", required=True)
+    subparsers = parser.add_subparsers(dest="command", required=False)
 
     caps = subparsers.add_parser("capabilities", help="Show wayfinder capabilities")
     caps.add_argument("--format", default="json", choices=["json"])
@@ -144,6 +150,21 @@ def main(argv: list[str] | None = None) -> None:
     parser = _build_parser()
     args = parser.parse_args(argv)
     request_id = getattr(args, "request_id", None)
+
+    if args.jsonrpc_stdio:
+        try:
+            service = WayfinderService(brain=_load_brain(args), store_root=None)
+            run_jsonrpc_server(service)
+            raise SystemExit(0)
+        except SystemExit:
+            raise
+        except BaseException as exc:
+            payload, code = map_exception(exc, request_id=request_id)
+            write_json(payload)
+            raise SystemExit(code) from exc
+
+    if args.command is None:
+        parser.error("the following arguments are required: command")
 
     if args.command == "history":
         try:
