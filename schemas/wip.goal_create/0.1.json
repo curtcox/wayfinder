@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://curtcox.github.io/wayfinder/schemas/wip.goal_create/0.1.json",
+  "title": "wip.goal_create/0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "protocol_version",
+    "create_id",
+    "created_at",
+    "actor",
+    "description",
+    "workspace_uri"
+  ],
+  "properties": {
+    "schema": { "const": "wip.goal_create/0.1" },
+    "protocol_version": {
+      "$ref": "https://curtcox.github.io/wayfinder/schemas/common/0.1.json#/$defs/protocol_version"
+    },
+    "create_id": { "type": "string", "minLength": 1 },
+    "created_at": {
+      "$ref": "https://curtcox.github.io/wayfinder/schemas/common/0.1.json#/$defs/rfc3339"
+    },
+    "actor": {
+      "$ref": "https://curtcox.github.io/wayfinder/schemas/common/0.1.json#/$defs/actor"
+    },
+    "description": { "type": "string" },
+    "workspace_uri": { "type": "string", "pattern": "^file:" },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "max_auto_risk_level": {
+          "type": "string",
+          "enum": ["none", "low", "medium", "high", "critical"]
+        }
+      }
+    },
+    "metadata": { "type": "object" },
+    "request_id": { "type": ["string", "null"] },
+    "run_id": {
+      "$ref": "https://curtcox.github.io/wayfinder/schemas/common/0.1.json#/$defs/run_id"
+    }
+  }
+}

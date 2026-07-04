@@ -68,6 +68,26 @@ class EventLog:
             os.fsync(handle.fileno())
         return stamped_events
 
+    def read_raw_lines_since(self, since_seq: int, *, limit: int | None = None) -> list[str]:
+        """Return verbatim stored JSONL lines with seq > since_seq (§1.4)."""
+        if not self.path.exists():
+            return []
+        lines: list[str] = []
+        with self.path.open(encoding="utf-8") as handle:
+            for line in handle:
+                if not line.strip():
+                    continue
+                parsed = json.loads(line)
+                if not isinstance(parsed, dict):
+                    msg = "event line is not an object"
+                    raise CorruptEventLogError(msg)
+                if int(parsed["seq"]) <= since_seq:
+                    continue
+                lines.append(line if line.endswith("\n") else f"{line}\n")
+                if limit is not None and len(lines) >= limit:
+                    break
+        return lines
+
     def _read_all_unchecked(self) -> list[dict[str, Any]]:
         if not self.path.exists():
             return []

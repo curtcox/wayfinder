@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://curtcox.github.io/wayfinder/schemas/wip.update/0.1.json",
+  "title": "wip.update/0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "protocol_version",
+    "update_id",
+    "goal_id",
+    "created_at",
+    "actor",
+    "update_type"
+  ],
+  "properties": {
+    "schema": { "const": "wip.update/0.1" },
+    "protocol_version": {
+      "$ref": "https://curtcox.github.io/wayfinder/schemas/common/0.1.json#/$defs/protocol_version"
+    },
+    "update_id": { "type": "string", "minLength": 1 },
+    "goal_id": { "type": "string", "minLength": 1 },
+    "created_at": {
+      "$ref": "https://curtcox.github.io/wayfinder/schemas/common/0.1.json#/$defs/rfc3339"
+    },
+    "actor": {
+      "$ref": "https://curtcox.github.io/wayfinder/schemas/common/0.1.json#/$defs/actor"
+    },
+    "update_type": {
+      "type": "string",
+      "enum": [
+        "recommendation_disposition",
+        "action_started",
+        "action_result",
+        "observation",
+        "correction",
+        "redaction",
+        "override",
+        "question_answer",
+        "approval",
+        "heartbeat",
+        "policy_denied",
+        "goal_cancel"
+      ]
+    },
+    "recommendation_id": { "type": "string" },
+    "action_id": { "type": "string" },
+    "issued_event_seq": { "type": "integer", "minimum": 1 },
+    "issued_event_hash": { "type": "string" },
+    "recommendation_disposition": { "type": "object" },
+    "action_started": { "type": "object" },
+    "action_result": { "type": "object" },
+    "observations": { "type": "array" },
+    "correction": { "type": "object" },
+    "redaction": { "type": "object" },
+    "override": { "type": "object" },
+    "question_answer": { "type": "object" },
+    "approval": { "type": "object" },
+    "heartbeat": { "type": "object" },
+    "policy_denied": { "type": "object" },
+    "goal_cancel": { "type": "object" },
+    "request_id": { "type": ["string", "null"] },
+    "run_id": {
+      "$ref": "https://curtcox.github.io/wayfinder/schemas/common/0.1.json#/$defs/run_id"
+    }
+  }
+}
