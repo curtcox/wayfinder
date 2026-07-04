@@ -1,4 +1,4 @@
-.PHONY: install lint format typecheck security complexity docs-lint docs-build docs-serve test coverage check clean
+.PHONY: install lint format typecheck security complexity docs-lint docs-build docs-serve fast single cli-smoke test coverage check clean
 
 PYTHON ?= python3
 UV ?= uv
@@ -49,6 +49,15 @@ docs-build:
 docs-serve:
 	$(RUN) mkdocs serve
 
+fast:
+	$(RUN) pytest -q -m "not conformance and not live"
+
+single:
+	$(RUN) pytest $(TEST)
+
+cli-smoke:
+	$(RUN) pytest -q tests/test_cli.py
+
 test:
 	$(RUN) pytest -n auto
 
@@ -58,6 +67,7 @@ coverage:
 
 check: lint typecheck security complexity docs-lint test coverage docs-build
 
+# Remove generated docs copies, site output, coverage, and local tool caches.
 clean:
 	rm -rf site .pytest_cache .mypy_cache .ruff_cache htmlcov .coverage coverage.xml
 	rm -rf docs/index.md docs/wayfinder-cli-user-guide.md docs/wayfinder-interaction-protocol-v0.1.md

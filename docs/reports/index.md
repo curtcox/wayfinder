@@ -3,12 +3,18 @@
 Quality and conformance reports are published here automatically on every push
 to `main`.
 
-## Coming soon
+## Current Reports
 
-Phase 1 will add:
+The `main` workflow publishes:
 
-- pytest HTML report (full results, including skipped/xfailed with reasons)
-- coverage HTML report and badge JSON
+- pytest HTML report
+- coverage HTML report
+- coverage JSON
+
+## Coming Soon
+
+Later phases will add:
+
 - conformance matrix (Appendix B test vectors §15.1–§15.38)
 - ruff, mypy, bandit, and pip-audit summaries
 

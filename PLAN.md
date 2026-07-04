@@ -1,5 +1,13 @@
 # Wayfinder Implementation Plan
 
+## Current Status
+
+The repository currently contains the Phase 2 protocol core library under
+`src/wayfinder/core/` and its pytest suite. The `wayfinder` CLI entry point is
+still a Phase 3 stub that exits with "not yet implemented"; examples in
+`wayfinder-cli-user-guide.md` describe the intended interface rather than a fully
+runnable CLI.
+
 **Objective:** implement every tool needed to run the examples in
 [wayfinder-cli-user-guide.md](wayfinder-cli-user-guide.md), conforming to
 [wayfinder-interaction-protocol-v0.1.md](wayfinder-interaction-protocol-v0.1.md) (WIP v0.1).
