@@ -36,8 +36,8 @@ jobs:
       - name: Install docs lint tools
         run: |
           npm install -g markdownlint-cli2
-            curl -sSfL https://github.com/lycheeverse/lychee/releases/download/lychee-v0.24.1/lychee-x86_64-unknown-linux-gnu.tar.gz \
-            | tar xz -C /usr/local/bin lychee
+          curl -sSfL https://github.com/lycheeverse/lychee/releases/download/lychee-v0.24.1/lychee-x86_64-unknown-linux-gnu.tar.gz \
+            | tar xz -C /usr/local/bin --strip-components=1 lychee-x86_64-unknown-linux-gnu/lychee
 
       - name: Install jq and make
         run: sudo apt-get update && sudo apt-get install -y jq make
@@ -61,7 +61,9 @@ jobs:
             --junitxml=reports-out/pytest/junit.xml \
             --cov=wayfinder --cov-report=html:reports-out/coverage \
             --cov-report=json:reports-out/coverage/coverage.json \
+            --cov-report=xml:coverage.xml \
             --cov-fail-under=80
+          uv run coverage report --include='src/wayfinder/core/*' --fail-under=90
 
       - name: Run scripted examples
         run: make examples-scripted

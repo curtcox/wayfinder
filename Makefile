@@ -42,7 +42,7 @@ complexity:
 
 docs-lint:
 	npx --yes markdownlint-cli2 "**/*.md" "#site" "#.venv"
-	lychee --offline --no-progress --exclude-path site --exclude mailto: \
+	lychee --offline --no-progress --exclude-path site --exclude-path docs/reports --exclude mailto: \
 		README.md PLAN.md wayfinder-cli-user-guide.md wayfinder-interaction-protocol-v0.1.md wayfinder-security.md docs/
 
 docs-build:

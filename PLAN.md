@@ -19,7 +19,9 @@ aligned the xenon complexity gate with existing ruff C901 exemptions for legacy
 §9 machine and protocol-mapping code, raised overall coverage to ≥80% with
 targeted tests, enforced ≥90% coverage on `wayfinder.core` in `make coverage`,
 fixed `make docs-lint` by migrating markdownlint config to
-`.markdownlint-cli2.jsonc`, and brought `make check` green locally.
+`.markdownlint-cli2.jsonc`, excluding the generated reports stub from lychee,
+fixing lychee CI installs for the v0.24.1 tarball layout, and brought
+`make check` green locally.
 
 **Objective:** implement every tool needed to run the examples in
 [wayfinder-cli-user-guide.md](wayfinder-cli-user-guide.md), conforming to
