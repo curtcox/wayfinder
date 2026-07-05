@@ -67,6 +67,7 @@ wayfinder-codex = "wayfinder.codex.main:main"
 wayfinder-web = "wayfinder.web.main:main"
 wayfinder-exec-web = "wayfinder.exec_web.main:main"
 wayfinder-exec-temporal = "wayfinder.exec_temporal.main:main"
+wayfinder-bridge = "wayfinder.bridge.main:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -150,10 +151,12 @@ ignore = [
 "src/wayfinder/exec/web_loop.py" = ["D103", "D102"]
 "src/wayfinder/exec_web/**" = ["D103", "D102", "D107", "BLE001", "TRY301"]
 "src/wayfinder/exec_temporal/**" = ["D103", "D102", "D107", "BLE001", "TRY301", "PLC0415"]
+"src/wayfinder/bridge/**" = ["D103", "D102", "D107", "D101", "BLE001", "TRY301", "PLC0415", "C901", "E501", "PLR2004", "TC003"]
 "tests/brains/test_web.py" = ["D103", "PLR2004", "S101", "INP001"]
 "tests/test_web_cli.py" = ["S603", "INP001", "D103", "S101"]
 "tests/test_exec_web_cli.py" = ["S603", "INP001", "D103", "S101"]
 "tests/test_exec_temporal_cli.py" = ["S603", "INP001", "D103", "S101"]
+"tests/test_bridge_gh_cli.py" = ["S603", "INP001", "D103", "S101", "SLF001", "RUF012", "ANN401", "A002"]
 "tests/brains/test_make.py" = ["D103", "PLR2004", "S101", "INP001"]
 "tests/brains/test_bt.py" = ["D103", "PLR2004", "S101", "INP001"]
 "tests/test_bt_cli.py" = ["S603", "INP001", "D103", "S101"]
