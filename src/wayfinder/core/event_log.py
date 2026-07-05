@@ -52,6 +52,31 @@ class EventLogHead:
     event_hash: str | None
 
 
+def _parse_verified_line(
+    line: str,
+    line_number: int,
+    *,
+    expected_seq: int | None,
+    prev_hash: str | None,
+) -> tuple[dict[str, Any], int, str]:
+    """Parse one JSONL line and verify its hash-chain link."""
+    try:
+        parsed = json.loads(line)
+    except json.JSONDecodeError as exc:
+        msg = f"partial or invalid JSON at line {line_number}"
+        raise CorruptEventLogError(msg) from exc
+    if not isinstance(parsed, dict):
+        msg = f"event at line {line_number} is not an object"
+        raise CorruptEventLogError(msg)
+    seq_start = int(parsed["seq"]) if expected_seq is None else expected_seq
+    new_prev_hash = _verify_chained_event(
+        parsed,
+        expected_seq=seq_start,
+        prev_hash=prev_hash,
+    )
+    return parsed, seq_start + 1, new_prev_hash
+
+
 class EventLog:
     """Goal-scoped append-only event log backed by events.ndjson."""
 
@@ -121,22 +146,12 @@ class EventLog:
             for line_number, line in enumerate(handle, start=1):
                 if not line.strip():
                     continue
-                try:
-                    parsed = json.loads(line)
-                except json.JSONDecodeError as exc:
-                    msg = f"partial or invalid JSON at line {line_number}"
-                    raise CorruptEventLogError(msg) from exc
-                if not isinstance(parsed, dict):
-                    msg = f"event at line {line_number} is not an object"
-                    raise CorruptEventLogError(msg)
-                if expected_seq is None:
-                    expected_seq = int(parsed["seq"])
-                prev_hash = _verify_chained_event(
-                    parsed,
+                parsed, expected_seq, prev_hash = _parse_verified_line(
+                    line,
+                    line_number,
                     expected_seq=expected_seq,
                     prev_hash=prev_hash,
                 )
-                expected_seq += 1
                 seq = int(parsed["seq"])
                 if seq <= since_seq:
                     continue

@@ -125,3 +125,41 @@ def test_run_tell_submitted_update_visible_in_history(stub_server: str, tmp_path
         == [{"text": observation_text, "effective": {"invalidates": False}}]
     ]
     assert matching, "submitted observation must appear byte-visible in history"
+
+
+def test_tell_main_json_format(
+    stub_server: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from wayfinder.tell.main import main
+
+    monkeypatch.setenv("WAYFINDER_LLM_BASE_URL", stub_server)
+    monkeypatch.setenv("WAYFINDER_LLM_API_KEY", "test-key")
+    monkeypatch.setenv("WAYFINDER_LLM_MODEL", "test-model")
+    workspace = tmp_path / "project"
+    workspace.mkdir()
+    store = tmp_path / "store"
+    service = service_for_store(store)
+    created = service.goal_create(goal_create_payload(workspace))
+    goal_id = str(created["goal"]["goal_id"])
+    StubResponseQueue.items = [
+        json.dumps(
+            {
+                "update_type": "observation",
+                "text": "note",
+                "invalidates": False,
+            },
+        ),
+    ]
+    with pytest.raises(SystemExit) as exc:
+        main(
+            [
+                "--format",
+                "json",
+                "--goal-id",
+                goal_id,
+                "--store",
+                str(store),
+                "note",
+            ],
+        )
+    assert exc.value.code == 0

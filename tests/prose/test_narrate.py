@@ -44,3 +44,24 @@ def test_narrating_reporter_prints_action_result(capsys: object) -> None:
 
 def test_format_goal_finished() -> None:
     assert format_goal_finished("goal_01", {"goal_status": "succeeded"}) == "goal_01 succeeded"
+
+
+def test_narrating_reporter_done_recommendation(capsys: object) -> None:
+    reporter = NarratingReporter()
+    reporter.on_recommendation(
+        {"recommendation_id": "rec_done", "recommendation_type": "done", "summary": "all good"},
+    )
+    captured = capsys.readouterr()  # type: ignore[attr-defined]
+    assert "done: 'all good'" in captured.out
+
+
+def test_command_label_falls_back_to_summary() -> None:
+    from wayfinder.prose.narrate import _command_label
+
+    assert _command_label({"summary": "wait for CI"}) == "wait for CI"
+
+
+def test_action_result_suffix_blocked() -> None:
+    from wayfinder.prose.narrate import _action_result_suffix
+
+    assert _action_result_suffix({"status": "blocked"}) == "blocked"

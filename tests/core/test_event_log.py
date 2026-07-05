@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -64,3 +65,32 @@ def test_append_lock_excludes_concurrent_holder(tmp_path: Path) -> None:
     with lock.acquire("writer-a"):
         with pytest.raises(StorageConflictError), lock.acquire("writer-b"):
             pass
+
+
+def test_iter_verified_lines_since_filters_and_limits(tmp_path: Path) -> None:
+    log = EventLog.for_goal(tmp_path, "goal_01")
+    log.append(_event_template(event_id="evt_00000001"))
+    log.append(_event_template(event_id="evt_00000002", type="observation.recorded"))
+    log.append(_event_template(event_id="evt_00000003", type="observation.recorded"))
+    lines = list(log.iter_verified_lines_since(1, limit=1))
+    assert len(lines) == 1
+    parsed = json.loads(lines[0])
+    assert parsed["seq"] == 2
+
+
+def test_iter_verified_lines_since_detects_corruption(tmp_path: Path) -> None:
+    log = EventLog.for_goal(tmp_path, "goal_01")
+    log.append(_event_template(event_id="evt_00000001"))
+    with log.path.open("a", encoding="utf-8") as handle:
+        handle.write("not-valid-json\n")
+    with pytest.raises(CorruptEventLogError, match="partial or invalid JSON"):
+        list(log.iter_verified_lines_since(0))
+
+
+def test_read_raw_lines_since_returns_verbatim_tail(tmp_path: Path) -> None:
+    log = EventLog.for_goal(tmp_path, "goal_01")
+    log.append(_event_template(event_id="evt_00000001"))
+    log.append(_event_template(event_id="evt_00000002", type="observation.recorded"))
+    lines = log.read_raw_lines_since(1)
+    assert len(lines) == 1
+    assert json.loads(lines[0])["seq"] == 2

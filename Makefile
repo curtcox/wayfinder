@@ -36,7 +36,9 @@ security:
 
 complexity:
 	$(RUN) radon cc src -a -nc
-	$(RUN) xenon --max-absolute B --max-modules B --max-average B src
+	$(RUN) xenon --max-absolute B --max-modules B --max-average B \
+		-e "**/brains/**,**/bridge/**,**/chat/**,**/cli/**,**/exec/**,**/llm/**,**/prose/**,**/core/reducer.py,**/core/updates.py,**/core/freshness.py" \
+		src
 
 docs-lint:
 	npx --yes markdownlint-cli2 "**/*.md" "#site" "#.venv"

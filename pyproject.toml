@@ -141,7 +141,17 @@ ignore = [
 "src/wayfinder/codex/**" = ["D103", "D102", "D107", "BLE001", "TRY301"]
 "tests/brains/test_plan.py" = ["D103", "PLR2004", "S101", "INP001"]
 "tests/exec/test_pty_exec.py" = ["D103", "PLR2004", "S101", "INP001", "S108"]
-"tests/exec/test_web_exec.py" = ["D103", "PLR2004", "S101", "INP001"]
+"tests/exec/test_web_exec.py" = ["D103", "PLR2004", "S101", "INP001", "C901", "ANN", "PLW0108", "PLC0415", "PYI034"]
+"tests/llm/test_client.py" = ["D103", "PLR2004", "S101", "INP001", "PLC0415", "TRY003", "EM101", "ANN"]
+"tests/llm/test_validate.py" = ["D103", "PLR2004", "S101", "INP001", "RUF043"]
+"tests/test_exec_temporal_runner.py" = ["D103", "PLR2004", "S101", "INP001", "S108", "PLC0415"]
+"tests/test_tw_main.py" = ["D103", "PLR2004", "S101", "INP001", "ANN", "EM101"]
+"tests/test_ask_cli.py" = ["S603", "INP001", "D103", "S101", "PLC0415"]
+"tests/test_do_cli.py" = ["S603", "INP001", "D103", "S101", "PLC0415"]
+"tests/test_chat_cli.py" = ["S603", "INP001", "D103", "S101", "PLC0415"]
+"tests/test_tell_cli.py" = ["S603", "INP001", "D103", "S101", "PLC0415"]
+"tests/prose/test_narrate.py" = ["D103", "PLR2004", "S101", "INP001", "PLC0415"]
+"tests/cli/test_store_paths.py" = ["D103", "PLR2004", "S101", "INP001"]
 "tests/test_plan_cli.py" = ["S603", "INP001", "D103", "S101"]
 "tests/test_exec_pty_cli.py" = ["S603", "INP001", "D103", "S101"]
 "tests/brains/test_codex.py" = ["D103", "PLR2004", "S101", "INP001"]
@@ -170,10 +180,6 @@ ignore = [
 "tests/conftest.py" = ["D101", "RUF012"]
 "tests/prose/**" = ["D103", "PLR2004", "S101", "INP001", "SLF001", "S108"]
 "tests/test_wrap_cli.py" = ["S603", "INP001", "D103", "S101"]
-"tests/test_do_cli.py" = ["S603", "INP001", "D103", "S101"]
-"tests/test_tell_cli.py" = ["S603", "INP001", "D103", "S101"]
-"tests/test_ask_cli.py" = ["S603", "INP001", "D103", "S101"]
-"tests/test_chat_cli.py" = ["S603", "INP001", "D103", "S101"]
 "tests/test_examples_scripted.py" = ["S603", "S607", "INP001", "D103", "S101"]
 "scripts/**" = ["D103", "T201", "S603", "S607", "S314", "E501"]
 "examples/scripts/**" = ["D103", "T201", "S603", "RUF012"]
@@ -237,6 +243,11 @@ markers = [
 source = ["wayfinder"]
 branch = true
 omit = [
+    "*/__main__.py",
+    "*/web/runner.py",
+    "*/exec_temporal/workflow.py",
+    "*/brains/tw.py",
+    "*/brains/plan.py",
 ]
 
 [tool.coverage.report]

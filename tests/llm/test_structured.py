@@ -129,6 +129,24 @@ def test_generate_brain_recommendation_retries_after_invalid_json(stub_server: s
     assert result["recommendation_type"] == "action"
 
 
+def test_generate_brain_recommendation_retries_after_schema_error(stub_server: str) -> None:
+    invalid = _valid_recommendation()
+    del invalid["risk"]
+    _ResponseQueue.items = [
+        json.dumps(invalid),
+        json.dumps(_valid_recommendation()),
+    ]
+    client = ChatClient(
+        LLMConfig(base_url=stub_server, api_key="test-key", model="test-model"),
+    )
+    result = generate_brain_recommendation(
+        client,
+        [{"role": "user", "content": "recommend next step"}],
+        max_retries=2,
+    )
+    assert result["risk"]["level"] == "low"
+
+
 def test_generate_brain_recommendation_raises_after_exhausted_retries(stub_server: str) -> None:
     _ResponseQueue.items = ["still-not-json", "still-not-json"]
     client = ChatClient(
