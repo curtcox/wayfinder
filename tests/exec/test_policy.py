@@ -99,6 +99,21 @@ def test_low_execute_local_allowed(tmp_path: Path) -> None:
     assert decision == PolicyDecision(denied=False, requires_approval=False)
 
 
+def test_sensitive_env_value_rejected(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    action = _shell_action(argv=["true"], workspace=workspace)
+    action["shell"]["env"]["set"] = {"API_KEY": {"value": "secret", "sensitive": True}}
+    decision = evaluate_policy(
+        action,
+        _low_local_risk(),
+        policy={},
+        workspace_uri=f"file:{workspace}",
+    )
+    assert decision.denied is True
+    assert decision.reason_code == "sensitive_env_value"
+
+
 def test_noop_action_allowed(tmp_path: Path) -> None:
     workspace = tmp_path / "workspace"
     workspace.mkdir()

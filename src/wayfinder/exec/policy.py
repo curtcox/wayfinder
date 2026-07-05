@@ -164,10 +164,31 @@ def _deny(
     )
 
 
+def _check_env_entries(shell: dict[str, Any]) -> PolicyDecision | None:
+    env = shell.get("env", {})
+    if not isinstance(env, dict):
+        return None
+    extra = env.get("set", {})
+    if not isinstance(extra, dict):
+        return None
+    for name, entry in extra.items():
+        if not isinstance(entry, dict):
+            continue
+        if entry.get("sensitive") is True and "value" in entry:
+            return _deny(
+                "sensitive_env_value",
+                f"plaintext sensitive env value for {name}",
+            )
+    return None
+
+
 def _evaluate_shell_policy(
     shell: dict[str, Any],
     shell_policy: dict[str, Any],
 ) -> PolicyDecision | None:
+    env_decision = _check_env_entries(shell)
+    if env_decision is not None:
+        return env_decision
     argv = shell.get("argv")
     if shell_policy.get("require_argv", True) and (not isinstance(argv, list) or not argv):
         return _deny("invalid_action", "shell.argv is required")

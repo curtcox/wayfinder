@@ -325,6 +325,18 @@ class ExecutorLoop:
             msg = "action recommendation missing action or risk"
             raise WayfinderClientError(msg)
 
+        kind = str(action.get("kind", ""))
+        if kind not in {"shell", "noop"}:
+            self._reject_recommendation(
+                recommendation,
+                reason="missing capability",
+            )
+            return ExecutorOutcome(
+                stopped_reason="missing_capability",
+                status=self.client.status(self.config.goal_id),
+                recommendation=recommendation,
+            )
+
         events = self.client.history(self.config.goal_id, since_seq=0)
         check = evaluate_executable(
             events,
@@ -377,12 +389,18 @@ class ExecutorLoop:
                         status=status,
                         recommendation=recommendation,
                     )
-                self._record_policy_denied(recommendation, precondition_decision)
-                self._track_loop_stall(
-                    rec_id,
-                    precondition_decision.reason_code or "precondition_failed",
+                reason_code = precondition_decision.reason_code or "precondition_failed"
+                self._record_action_blocked(
+                    recommendation,
+                    reason_code=reason_code,
+                    reason=precondition_decision.reason or "precondition not satisfied",
                 )
-                return None
+                self._track_loop_stall(rec_id, reason_code)
+                return ExecutorOutcome(
+                    stopped_reason="blocked",
+                    status=self.client.status(self.config.goal_id),
+                    recommendation=recommendation,
+                )
 
         if policy_decision.requires_approval:
             return ExecutorOutcome(
@@ -492,6 +510,65 @@ class ExecutorLoop:
             )
         msg = f"unsupported action kind: {kind}"
         raise WayfinderClientError(msg)
+
+    def _reject_recommendation(
+        self,
+        recommendation: dict[str, Any],
+        *,
+        reason: str,
+    ) -> None:
+        rec_id = str(recommendation["recommendation_id"])
+        action = recommendation.get("action", {})
+        action_id = str(action.get("action_id", "")) if isinstance(action, dict) else ""
+        issued_seq, issued_hash = self._issued_context(rec_id)
+        body = self._base_update(
+            update_id=self._new_update_id("upd_reject"),
+            recommendation_id=rec_id,
+            action_id=action_id or None,
+            issued_event_seq=issued_seq,
+            issued_event_hash=issued_hash,
+            update_type="recommendation_disposition",
+            extra={
+                "recommendation_disposition": {
+                    "disposition": "rejected",
+                    "reason": reason,
+                },
+            },
+        )
+        self._submit_update(body)
+
+    def _record_action_blocked(
+        self,
+        recommendation: dict[str, Any],
+        *,
+        reason_code: str,
+        reason: str,
+    ) -> None:
+        rec_id = str(recommendation["recommendation_id"])
+        action = recommendation.get("action", {})
+        action_id = str(action.get("action_id", "")) if isinstance(action, dict) else ""
+        issued_seq, issued_hash = self._issued_context(rec_id)
+        now = self._now()
+        body = self._base_update(
+            update_id=self._new_update_id("upd_blocked"),
+            recommendation_id=rec_id,
+            action_id=action_id or None,
+            issued_event_seq=issued_seq,
+            issued_event_hash=issued_hash,
+            update_type="action_result",
+            extra={
+                "action_result": {
+                    "status": "blocked",
+                    "changed": "unknown",
+                    "reason_code": reason_code,
+                    "started_at": now,
+                    "ended_at": now,
+                    "process": {"exit_code": None, "signal": None, "timed_out": False},
+                    "output": {"stdout": "", "stderr": reason},
+                },
+            },
+        )
+        self._submit_update(body)
 
     def _record_policy_denied(
         self,

@@ -64,6 +64,130 @@ def run_cli(
     )
 
 
+def run_exec(
+    args: list[str],
+    *,
+    store: Path,
+    playbook: Path | None = None,
+    wayfinder: str | None = None,
+    policy: Path | None = None,
+    executor_id: str | None = None,
+) -> subprocess.CompletedProcess[str]:
+    cmd = [sys.executable, "-m", "wayfinder.exec", "--store", str(store)]
+    if playbook is not None:
+        cmd.extend(["--brain-playbook", str(playbook)])
+    if wayfinder is not None:
+        cmd.extend(["--wayfinder", wayfinder])
+    if policy is not None:
+        cmd.extend(["--policy", str(policy)])
+    if executor_id is not None:
+        cmd.extend(["--executor-id", executor_id])
+    cmd.extend(args)
+    return subprocess.run(cmd, text=True, capture_output=True, check=False)
+
+
+def write_playbook(path: Path, recommendation: dict[str, Any]) -> Path:
+    """Write a single-rule scripted playbook and return *path*."""
+    payload = {"rules": [{"match": {"goal_status": "pending"}, "recommendation": recommendation}]}
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    return path
+
+
+def write_exec_playbook(path: Path, recommendation: dict[str, Any]) -> Path:
+    """Write a playbook that runs one action then marks the goal done."""
+    payload = {
+        "rules": [
+            {
+                "match": {"goal_status": "pending", "open_recommendation_id": {"$null": True}},
+                "recommendation": recommendation,
+            },
+            {
+                "match": {"completed_steps": {"$gte": 1}, "open_recommendation_id": {"$null": True}},
+                "recommendation": {
+                    "recommendation_type": "done",
+                    "summary": "Action finished.",
+                    "goal_status": "running",
+                    "confidence": 0.95,
+                    "done": {"reason": "Action finished."},
+                },
+            },
+        ],
+    }
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    return path
+
+
+def event_types_from_history(store: Path, goal_id: str) -> list[str]:
+    history = run_cli(["--store", str(store), "history", "--goal-id", goal_id, "--since-seq", "0"])
+    assert history.returncode == 0, history.stdout + history.stderr
+    return [
+        json.loads(line)["type"] for line in history.stdout.splitlines() if line.strip()
+    ]
+
+
+def shell_action_recommendation(
+    *,
+    argv: list[str],
+    workspace: Path,
+    action_id: str = "act_01",
+    recommendation_id: str = "rec_01",
+    preconditions: list[dict[str, Any]] | None = None,
+    env_set: dict[str, Any] | None = None,
+    timeout_seconds: int = 60,
+    expected_exit_codes: list[int] | None = None,
+    kind: str = "shell",
+) -> dict[str, Any]:
+    """Build a minimal executable action recommendation for scripted playbooks."""
+    env: dict[str, Any] = {"mode": "minimal", "set": env_set or {}}
+    recommendation: dict[str, Any] = {
+        "recommendation_type": "action",
+        "summary": "Test action.",
+        "goal_status": "running",
+        "confidence": 0.9,
+        "action": {
+            "action_id": action_id,
+            "kind": kind,
+            "title": "Test",
+            "shell": {
+                "argv": argv,
+                "command_for_display": " ".join(argv),
+                "cwd": f"file:{workspace}",
+                "env": env,
+                "stdin": {"mode": "none"},
+                "pty": False,
+                "timeout_seconds": timeout_seconds,
+                "expected_exit_codes": expected_exit_codes or [0],
+                "requires_shell": False,
+            },
+            "preconditions": preconditions or [],
+            "success_criteria": [],
+        },
+        "idempotency": {
+            "level": "strong",
+            "key": "idem_test",
+            "scope": "workspace",
+            "safe_to_retry": True,
+            "safe_to_run_if_already_done": True,
+            "detects_noop": False,
+            "dedupe_strategy": "idempotency_key",
+            "partial_failure_recovery": "retry",
+            "max_attempts": 1,
+        },
+        "risk": {
+            "level": "low",
+            "classes": ["execute_local"],
+            "blast_radius": "workspace",
+            "requires_approval": False,
+            "destructive": False,
+            "network": "not_required",
+            "secrets": "not_required",
+            "rollback": {"available": False, "kind": "unknown", "instructions": None},
+        },
+    }
+    recommendation["recommendation_id"] = recommendation_id
+    return recommendation
+
+
 def run_update_via_cli(
     store: Path,
     goal_id: str,
@@ -81,9 +205,13 @@ def create_goal_via_cli(
     *,
     create_id: str = "create_test_01",
     description: str = "Make the project tests pass.",
+    playbook: Path | None = None,
 ) -> dict[str, Any]:
     body = json.dumps(goal_create_payload(workspace, create_id=create_id, description=description))
-    proc = run_cli(["--store", str(store), "goal", "create"], stdin=body)
+    args = ["--store", str(store), "goal", "create"]
+    if playbook is not None:
+        args = ["--store", str(store), "--brain-playbook", str(playbook), "goal", "create"]
+    proc = run_cli(args, stdin=body)
     assert proc.returncode == 0, proc.stdout + proc.stderr
     payload = json.loads(proc.stdout)
     result: dict[str, Any] = payload["result"]
