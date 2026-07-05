@@ -164,6 +164,7 @@ def compose_update(
     context: GoalContext,
     *,
     update_id: str | None = None,
+    actor: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Turn a validated draft into a wip.update document."""
     validated = validate_update_draft(draft)
@@ -175,7 +176,7 @@ def compose_update(
         "update_id": update_id or f"upd_{secrets.token_hex(4)}",
         "goal_id": context.goal_id,
         "created_at": datetime.now(tz=UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "actor": _default_actor(),
+        "actor": actor or _default_actor(),
         "update_type": update_type,
     }
 

@@ -6,7 +6,12 @@ import json
 from typing import Any, Protocol
 
 from wayfinder.llm.client import ChatClient
-from wayfinder.prose.context import GoalContext, ReadClient, gather_goal_context, gather_store_context
+from wayfinder.prose.context import (
+    GoalContext,
+    ReadClient,
+    gather_goal_context,
+    gather_store_context,
+)
 
 
 class WayfinderClientProtocol(ReadClient, Protocol):

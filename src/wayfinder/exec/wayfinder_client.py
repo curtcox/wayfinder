@@ -8,11 +8,36 @@ import subprocess  # nosec B404
 import sys
 from typing import Any
 
-from wayfinder.core.errors import InvalidInputError
+from wayfinder.core.errors import (
+    ArtifactIntegrityError,
+    InvalidInputError,
+    PolicyDeniedError,
+    StaleRecommendationError,
+    StorageConflictError,
+)
+from wayfinder.core.hash_chain import CorruptEventLogError
 
 
 class WayfinderClientError(RuntimeError):
     """Raised when a wayfinder subprocess returns an error envelope."""
+
+
+_WIP_ERROR_TYPES: dict[str, type[Exception]] = {
+    "invalid_input": InvalidInputError,
+    "policy_denied": PolicyDeniedError,
+    "stale_recommendation": StaleRecommendationError,
+    "storage_conflict": StorageConflictError,
+    "corrupt_event_log": CorruptEventLogError,
+    "artifact_integrity_failed": ArtifactIntegrityError,
+}
+
+
+def _raise_wayfinder_error(code: str, message: str) -> None:
+    exc_type = _WIP_ERROR_TYPES.get(code, WayfinderClientError)
+    if exc_type is WayfinderClientError:
+        msg = f"{code}: {message}"
+        raise WayfinderClientError(msg)
+    raise exc_type(message)
 
 
 class WayfinderClient:
@@ -61,8 +86,7 @@ class WayfinderClient:
                 if isinstance(error, dict)
                 else "wayfinder error"
             )
-            msg = f"{code}: {message}"
-            raise WayfinderClientError(msg)
+            _raise_wayfinder_error(str(code), str(message))
         if proc.returncode != 0:
             msg = f"wayfinder exited {proc.returncode}: {proc.stdout}"
             raise WayfinderClientError(msg)

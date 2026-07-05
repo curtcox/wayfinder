@@ -51,6 +51,7 @@ wayfinder-do = "wayfinder.do.main:main"
 wayfinder-tell = "wayfinder.tell.main:main"
 wayfinder-ask = "wayfinder.ask.main:main"
 wayfinder-chat = "wayfinder.chat.main:main"
+wayfinder-make = "wayfinder.make.main:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -107,6 +108,10 @@ ignore = [
 "src/wayfinder/tell/**" = ["D103", "D102", "D107", "BLE001", "TRY301", "PLR0913", "ANN401"]
 "src/wayfinder/ask/**" = ["D103", "D102", "D107", "BLE001", "TRY301", "PLR0913", "ANN401"]
 "src/wayfinder/chat/**" = ["D103", "D102", "D107", "BLE001", "TRY301", "PLR0913", "ANN401", "PLR0912", "TC003"]
+"src/wayfinder/brains/make.py" = ["D102", "D103", "S603", "PLR0913"]
+"src/wayfinder/make/**" = ["D103", "D102", "D107", "BLE001", "TRY301"]
+"tests/brains/test_make.py" = ["D103", "PLR2004", "S101", "INP001"]
+"tests/test_make_cli.py" = ["S603", "INP001", "D103", "S101"]
 "tests/llm/**" = ["D103", "PLR2004", "S101", "INP001", "RUF012", "A002", "SLF001"]
 "tests/brains/**" = ["D103", "PLR2004", "S101", "INP001"]
 "tests/conftest.py" = ["D101", "RUF012"]

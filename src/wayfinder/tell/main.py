@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import argparse
 import sys
-from typing import IO
+from typing import IO, Any
 
 from wayfinder.cli.responses import map_exception, write_json
 from wayfinder.core.errors import InvalidInputError
@@ -59,6 +59,7 @@ def run_tell(
     output_format: str = "text",
     client: ChatClient | None = None,
     output_stream: IO[str] | None = None,
+    actor: dict[str, Any] | None = None,
 ) -> dict[str, object]:
     """Classify prose into an update and submit it."""
     llm_client = client or ChatClient(load_llm_config())
@@ -69,7 +70,7 @@ def run_tell(
     )
     context = gather_goal_context(wf, goal_id)
     draft = generate_update_draft(llm_client, prose, context)
-    update = compose_update(draft, context)
+    update = compose_update(draft, context, actor=actor)
     result = wf.update(goal_id, update)
     receipt = format_update_receipt(update, result, context=context)
 
