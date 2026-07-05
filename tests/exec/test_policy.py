@@ -74,6 +74,21 @@ def test_pty_rejected(tmp_path: Path) -> None:
     assert decision.reason_code == "pty_not_allowed"
 
 
+def test_browser_steps_rejected_without_opt_in(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    action = _shell_action(argv=["python", "-m", "wayfinder.web.runner"], workspace=workspace)
+    action["shell"]["x_browser_steps"] = [{"op": "navigate", "url": "https://example.com"}]
+    decision = evaluate_policy(
+        action,
+        {"level": "low", "classes": ["network_read"], "requires_approval": False},
+        policy={},
+        workspace_uri=f"file:{workspace}",
+    )
+    assert decision.denied is True
+    assert decision.reason_code == "browser_steps_not_allowed"
+
+
 def test_requires_shell_needs_approval(tmp_path: Path) -> None:
     workspace = tmp_path / "workspace"
     workspace.mkdir()

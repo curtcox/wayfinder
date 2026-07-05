@@ -439,7 +439,9 @@ def _action_recommendation(
             "requires_approval": requires_approval,
             "destructive": False,
             "network": network,
-            "secrets": "required" if any("secret_ref" in step for step in steps) else "not_required",
+            "secrets": "required"
+            if any("secret_ref" in step for step in steps)
+            else "not_required",
             "rollback": {"available": False, "kind": "unknown", "instructions": None},
         },
         "explanation": {

@@ -6,6 +6,7 @@ import getpass
 import json
 import subprocess
 import sys
+import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -124,6 +125,24 @@ def event_types_from_history(store: Path, goal_id: str) -> list[str]:
     history = run_cli(["--store", str(store), "history", "--goal-id", goal_id, "--since-seq", "0"])
     assert history.returncode == 0, history.stdout + history.stderr
     return [json.loads(line)["type"] for line in history.stdout.splitlines() if line.strip()]
+
+
+def wait_for_event_type(
+    store: Path,
+    goal_id: str,
+    event_type: str,
+    *,
+    timeout_seconds: float = 30.0,
+    poll_interval_seconds: float = 0.05,
+) -> None:
+    """Poll goal history until an event type appears or timeout."""
+    deadline = time.monotonic() + timeout_seconds
+    while time.monotonic() < deadline:
+        if event_type in event_types_from_history(store, goal_id):
+            return
+        time.sleep(poll_interval_seconds)
+    msg = f"timed out waiting for {event_type!r} in goal {goal_id} history"
+    raise TimeoutError(msg)
 
 
 def shell_action_recommendation(

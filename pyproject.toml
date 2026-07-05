@@ -48,6 +48,7 @@ machines = [
     "pyperplan>=2.1",
     "pexpect>=4.9,<5",
     "playwright>=1.49,<2",
+    "temporalio>=1.9,<2",
 ]
 [project.scripts]
 wayfinder = "wayfinder.cli.main:main"
@@ -65,6 +66,7 @@ wayfinder-exec-pty = "wayfinder.exec_pty.main:main"
 wayfinder-codex = "wayfinder.codex.main:main"
 wayfinder-web = "wayfinder.web.main:main"
 wayfinder-exec-web = "wayfinder.exec_web.main:main"
+wayfinder-exec-temporal = "wayfinder.exec_temporal.main:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -147,9 +149,11 @@ ignore = [
 "src/wayfinder/exec/web_exec.py" = ["D103", "D102", "C901", "PLR0912", "PLR0915", "ANN401", "PLC0415", "BLE001", "TRY003"]
 "src/wayfinder/exec/web_loop.py" = ["D103", "D102"]
 "src/wayfinder/exec_web/**" = ["D103", "D102", "D107", "BLE001", "TRY301"]
+"src/wayfinder/exec_temporal/**" = ["D103", "D102", "D107", "BLE001", "TRY301", "PLC0415"]
 "tests/brains/test_web.py" = ["D103", "PLR2004", "S101", "INP001"]
 "tests/test_web_cli.py" = ["S603", "INP001", "D103", "S101"]
 "tests/test_exec_web_cli.py" = ["S603", "INP001", "D103", "S101"]
+"tests/test_exec_temporal_cli.py" = ["S603", "INP001", "D103", "S101"]
 "tests/brains/test_make.py" = ["D103", "PLR2004", "S101", "INP001"]
 "tests/brains/test_bt.py" = ["D103", "PLR2004", "S101", "INP001"]
 "tests/test_bt_cli.py" = ["S603", "INP001", "D103", "S101"]
@@ -195,6 +199,10 @@ ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = "playwright.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "temporalio.*"
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]

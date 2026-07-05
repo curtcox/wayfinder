@@ -63,6 +63,7 @@ DEFAULT_POLICY: dict[str, Any] = {
         "require_argv": True,
         "allow_requires_shell": False,
         "allow_pty": False,
+        "allow_browser_steps": False,
         "default_env_mode": "minimal",
         "denied_argv0": ["rm", "sudo", "doas", "dd", "mkfs", "shutdown", "reboot"],
     },
@@ -198,6 +199,14 @@ def _evaluate_shell_policy(
         return _deny("denied_argv0", f"argv[0] denied by policy: {argv0}")
     if shell.get("pty") is True and not shell_policy.get("allow_pty", False):
         return _deny("pty_not_allowed", "pty is not allowed under v0.1 policy")
+    if isinstance(shell.get("x_browser_steps"), list) and not shell_policy.get(
+        "allow_browser_steps",
+        False,
+    ):
+        return _deny(
+            "browser_steps_not_allowed",
+            "x_browser_steps require allow_browser_steps policy opt-in",
+        )
     if shell.get("requires_shell") is True and not shell_policy.get("allow_requires_shell", False):
         return PolicyDecision(
             denied=True,

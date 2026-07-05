@@ -20,6 +20,7 @@ class _WebOutcome:
     transcript: str
     download_paths: list[Path]
     redaction_values: list[str]
+    session_id: str | None = None
 
 
 def _browser_steps(shell: dict[str, Any]) -> list[dict[str, Any]]:
@@ -75,7 +76,7 @@ def _require_playwright() -> Any:
     return sync_playwright
 
 
-def _browserbase_cdp_url() -> str | None:
+def _browserbase_cdp_url() -> tuple[str, str] | None:
     api_key = os.environ.get("BROWSERBASE_API_KEY", "").strip()
     if not api_key:
         return None
@@ -95,7 +96,10 @@ def _browserbase_cdp_url() -> str | None:
     response.raise_for_status()
     payload = response.json()
     connect_url = payload.get("connectUrl")
-    return str(connect_url) if isinstance(connect_url, str) else None
+    session_id = payload.get("id")
+    if not isinstance(connect_url, str) or not isinstance(session_id, str):
+        return None
+    return connect_url, session_id
 
 
 def _run_steps_playwright(
@@ -109,12 +113,15 @@ def _run_steps_playwright(
     redaction_values: list[str] = []
     download_paths: list[Path] = []
     exit_code = 0
+    session_id: str | None = None
 
     with sync_playwright() as playwright:
-        cdp_url = _browserbase_cdp_url()
-        if cdp_url:
+        browserbase = _browserbase_cdp_url()
+        if browserbase is not None:
+            cdp_url, session_id = browserbase
             browser = playwright.chromium.connect_over_cdp(cdp_url)
             transcript_parts.append("backend=browserbase")
+            transcript_parts.append(f"session_id={session_id}")
         else:
             browser = playwright.chromium.launch(headless=True)
             transcript_parts.append("backend=local_playwright")
@@ -168,6 +175,7 @@ def _run_steps_playwright(
         transcript=transcript,
         download_paths=download_paths,
         redaction_values=redaction_values,
+        session_id=session_id,
     )
 
 
@@ -305,4 +313,8 @@ def build_web_action_result(
                 artifact_store.verify_reference(ref)
                 result.setdefault("artifacts", []).append(ref)
                 output.setdefault("downloads", []).append(ref["artifact_id"])
+    for line in transcript.splitlines():
+        if line.startswith("session_id="):
+            output["browser_session_id"] = line.split("=", 1)[1]
+            break
     return result

@@ -6,7 +6,6 @@ import json
 import signal
 import subprocess
 import sys
-import time
 from pathlib import Path
 
 import pytest
@@ -21,6 +20,7 @@ from tests.conformance.helpers import (
     run_update_via_cli,
     service_for_store,
     shell_action_recommendation,
+    wait_for_event_type,
     write_exec_playbook,
     write_playbook,
 )
@@ -276,7 +276,7 @@ def test_exec_sigkill_mid_action_resumes_without_reexecution(tmp_path: Path) -> 
         goal_id,
     ]
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-    time.sleep(2)
+    wait_for_event_type(store, goal_id, "action.started")
     proc.send_signal(signal.SIGKILL)
     proc.wait(timeout=10)
     assert proc.returncode != 0

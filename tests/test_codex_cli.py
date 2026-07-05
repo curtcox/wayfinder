@@ -10,7 +10,9 @@ from pathlib import Path
 from tests.conformance.helpers import goal_create_payload, run_cli
 
 
-def _run_codex_cli(args: list[str], *, stdin: str | None = None) -> subprocess.CompletedProcess[str]:
+def _run_codex_cli(
+    args: list[str], *, stdin: str | None = None
+) -> subprocess.CompletedProcess[str]:
     cmd = [sys.executable, "-m", "wayfinder.codex", *args]
     return subprocess.run(
         cmd,
