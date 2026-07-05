@@ -26,6 +26,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "bandit>=1.7,<2",
+    "httpx>=0.28,<1",
     "hypothesis>=6,<7",
     "mypy>=1.13,<2",
     "pip-audit>=2,<3",
@@ -42,10 +43,14 @@ docs = [
     "mkdocs>=1.6,<2",
     "mkdocs-material>=9.5,<10",
 ]
+llm = [
+    "httpx>=0.28,<1",
+]
 
 [project.scripts]
 wayfinder = "wayfinder.cli.main:main"
 wayfinder-exec = "wayfinder.exec.main:main"
+wayfinder-wrap = "wayfinder.wrap.main:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -73,6 +78,7 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["D103", "PLR2004", "S101", "INP001", "TC003", "SIM117", "E501", "PERF401"]
+"tests/core/**" = ["D103", "PLR2004", "S101", "INP001", "I001"]
 "tests/cli/**" = ["S603", "I001"]
 "tests/exec/**" = ["S603", "I001", "D103", "PLR2004", "S101", "INP001"]
 "tests/test_exec_cli.py" = ["S603", "I001", "D103", "S101", "INP001"]
@@ -80,13 +86,13 @@ ignore = [
 "src/wayfinder/cli/**" = ["D103", "D102", "D107", "PLR0913", "C901", "TC001", "TC003", "SIM102", "BLE001", "E501"]
 "src/wayfinder/cli/main.py" = ["D103", "PLR0912", "PLR0915", "C901", "PLR0911", "TRY301"]
 "src/wayfinder/cli/jsonrpc.py" = ["D103", "D102", "PLR0911", "C901", "PLR0912", "BLE001", "SLF001", "TRY301", "ANN401", "RET501", "PLR1711"]
-"tests/conformance/**" = ["D103", "PLR2004", "S101", "INP001", "SLF001", "S603", "TC001", "SIM108"]
+"tests/conformance/**" = ["D103", "PLR2004", "S101", "INP001", "SLF001", "S603", "TC001", "SIM108", "PLR0913"]
 "tests/cli/test_jsonrpc.py" = ["D103", "PLR2004", "S101", "INP001", "SLF001"]
 "src/wayfinder/cli/responses.py" = ["RUF002", "SIM114"]
-"src/wayfinder/brains/**" = ["D102", "D103", "D107", "ANN401", "TC003"]
+"src/wayfinder/brains/**" = ["D102", "D103", "D107", "ANN401", "TC003", "S603", "C901", "PLR0911"]
 "src/wayfinder/exec/**" = ["D103", "D102", "D107", "PLR0912", "PLR0915", "PLR0913", "PLR0911", "C901", "S603", "BLE001", "TRY301", "TRY004", "TC003", "TC001", "ANN401", "PLR2004", "RUF002", "PLC0415", "SIM108", "FURB162"]
 "src/wayfinder/core/canonical.py" = ["ANN401"]
-"src/wayfinder/core/**" = ["D102", "D107", "TC003"]
+"src/wayfinder/core/**" = ["D102", "D107", "TC003", "E501"]
 "src/wayfinder/core/reducer.py" = ["C901", "PLR0912", "PLR0915", "SIM102"]
 "src/wayfinder/core/updates.py" = ["C901", "PLR0911", "PLR0912", "PLR0915", "PLR0913", "ANN401", "D103"]
 "src/wayfinder/core/freshness.py" = ["C901", "FBT003", "D103"]
@@ -94,6 +100,10 @@ ignore = [
 "src/wayfinder/core/idempotency.py" = ["D101", "PTH105", "PTH101"]
 "src/wayfinder/core/artifacts.py" = ["PTH105", "PTH101"]
 "src/wayfinder/core/types.py" = ["D103"]
+"src/wayfinder/llm/**" = ["D103", "D102", "D107", "PLR0913", "PLR0912", "TRY003", "BLE001", "S603", "ANN401", "TC003", "E501", "C901", "TC001"]
+"src/wayfinder/wrap/**" = ["D103", "D102", "D107", "BLE001", "TRY301"]
+"tests/llm/**" = ["D103", "PLR2004", "S101", "INP001", "RUF012", "A002", "SLF001"]
+"tests/brains/**" = ["D103", "PLR2004", "S101", "INP001"]
 
 [tool.mypy]
 python_version = "3.11"

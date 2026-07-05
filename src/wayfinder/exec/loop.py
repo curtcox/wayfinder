@@ -11,7 +11,6 @@ from typing import Any
 
 from wayfinder.cli.store_paths import resolve_store_root
 from wayfinder.core.artifacts import ArtifactStore
-from wayfinder.core.errors import ArtifactIntegrityError
 from wayfinder.core.freshness import evaluate_executable
 from wayfinder.core.types import is_terminal_goal_status
 from wayfinder.exec.durability import DurabilityStore, PendingAction

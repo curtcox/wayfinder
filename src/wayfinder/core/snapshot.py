@@ -42,6 +42,7 @@ def _state_from_dict(data: dict[str, Any]) -> StatusState:
 
 
 def snapshots_dir(store_root: Path, goal_id: str) -> Path:
+    """Return the snapshots directory for *goal_id* within *store_root*."""
     return store_root / "goals" / goal_id / "snapshots"
 
 
@@ -100,15 +101,15 @@ def write_snapshot(
         "goal_id": goal_id,
         "seq": target_seq,
         "event_log_head": str(anchor["event_hash"]),
-        "created_at": created_at
-        or datetime.now(tz=UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "created_at": created_at or datetime.now(tz=UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "state": _state_to_dict(state),
     }
     validate_snapshot(snapshot, events)
     directory = snapshots_dir(store_root, goal_id)
     directory.mkdir(parents=True, exist_ok=True)
     path = directory / f"{target_seq:08d}.json"
-    path.write_text(json.dumps(snapshot, separators=(",", ":"), ensure_ascii=False), encoding="utf-8")
+    payload = json.dumps(snapshot, separators=(",", ":"), ensure_ascii=False)
+    path.write_text(payload, encoding="utf-8")
     return snapshot
 
 

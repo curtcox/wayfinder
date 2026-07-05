@@ -102,7 +102,10 @@ def write_exec_playbook(path: Path, recommendation: dict[str, Any]) -> Path:
                 "recommendation": recommendation,
             },
             {
-                "match": {"completed_steps": {"$gte": 1}, "open_recommendation_id": {"$null": True}},
+                "match": {
+                    "completed_steps": {"$gte": 1},
+                    "open_recommendation_id": {"$null": True},
+                },
                 "recommendation": {
                     "recommendation_type": "done",
                     "summary": "Action finished.",
@@ -120,9 +123,7 @@ def write_exec_playbook(path: Path, recommendation: dict[str, Any]) -> Path:
 def event_types_from_history(store: Path, goal_id: str) -> list[str]:
     history = run_cli(["--store", str(store), "history", "--goal-id", goal_id, "--since-seq", "0"])
     assert history.returncode == 0, history.stdout + history.stderr
-    return [
-        json.loads(line)["type"] for line in history.stdout.splitlines() if line.strip()
-    ]
+    return [json.loads(line)["type"] for line in history.stdout.splitlines() if line.strip()]
 
 
 def shell_action_recommendation(

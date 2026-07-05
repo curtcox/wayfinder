@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from tests.conformance.helpers import append_observations, goal_create_payload, service_for_store
 from wayfinder.core.goal_store import GoalStore
 from wayfinder.core.reducer import reduce_events
 from wayfinder.core.snapshot import reduce_from_snapshot, write_snapshot
-from tests.conformance.helpers import append_observations, goal_create_payload, service_for_store
 
 
 def test_snapshot_replay_matches_full_replay(tmp_path: Path) -> None:

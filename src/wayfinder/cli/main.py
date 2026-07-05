@@ -9,6 +9,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from wayfinder.brains.base import Brain
+from wayfinder.brains.llm import LLMBrain
 from wayfinder.brains.scripted import ScriptedBrain
 from wayfinder.cli.jsonrpc import run_jsonrpc_server
 from wayfinder.cli.responses import map_exception, success_response, write_json
@@ -17,15 +19,15 @@ from wayfinder.core.errors import InvalidInputError
 from wayfinder.core.hash_chain import CorruptEventLogError
 
 
-def _build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="wayfinder")
+def _build_parser(*, prog: str = "wayfinder") -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(prog=prog)
     parser.add_argument(
         "--store",
         help="Override wayfinder store root (or set WAYFINDER_STORE)",
     )
     parser.add_argument(
         "--brain",
-        choices=["scripted"],
+        choices=["scripted", "llm"],
         default=os.environ.get("WAYFINDER_BRAIN", "scripted"),
         help="Recommendation brain to use",
     )
@@ -93,14 +95,16 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _load_brain(args: argparse.Namespace) -> ScriptedBrain:
-    if args.brain != "scripted":
-        msg = f"unsupported brain: {args.brain}"
-        raise InvalidInputError(msg)
-    playbook_path = args.brain_playbook or os.environ.get("WAYFINDER_BRAIN_PLAYBOOK")
-    if playbook_path:
-        return ScriptedBrain.from_path(Path(playbook_path))
-    return ScriptedBrain.default()
+def _load_brain(args: argparse.Namespace) -> Brain:
+    if args.brain == "scripted":
+        playbook_path = args.brain_playbook or os.environ.get("WAYFINDER_BRAIN_PLAYBOOK")
+        if playbook_path:
+            return ScriptedBrain.from_path(Path(playbook_path))
+        return ScriptedBrain.default()
+    if args.brain == "llm":
+        return LLMBrain.from_config()
+    msg = f"unsupported brain: {args.brain}"
+    raise InvalidInputError(msg)
 
 
 def _read_stdin_json() -> dict[str, Any]:
@@ -147,14 +151,21 @@ def _dispatch(service: WayfinderService, args: argparse.Namespace) -> dict[str, 
     raise InvalidInputError(msg)
 
 
-def main(argv: list[str] | None = None) -> None:
-    parser = _build_parser()
+def run_cli(
+    argv: list[str] | None = None,
+    *,
+    brain: Brain | None = None,
+    prog: str = "wayfinder",
+) -> None:
+    """Parse CLI arguments and run one wayfinder command."""
+    parser = _build_parser(prog=prog)
     args = parser.parse_args(argv)
     request_id = getattr(args, "request_id", None)
+    resolved_brain = brain if brain is not None else _load_brain(args)
 
     if args.jsonrpc_stdio:
         try:
-            service = WayfinderService(brain=_load_brain(args), store_root=None)
+            service = WayfinderService(brain=resolved_brain, store_root=None)
             run_jsonrpc_server(service)
             raise SystemExit(0)
         except SystemExit:
@@ -169,7 +180,7 @@ def main(argv: list[str] | None = None) -> None:
 
     if args.command == "history":
         try:
-            service = WayfinderService(brain=_load_brain(args), store_root=None)
+            service = WayfinderService(brain=resolved_brain, store_root=None)
             streamed = False
             for line in service.history_iter(
                 args.goal_id,
@@ -190,7 +201,7 @@ def main(argv: list[str] | None = None) -> None:
             raise SystemExit(code) from exc
 
     try:
-        service = WayfinderService(brain=_load_brain(args), store_root=None)
+        service = WayfinderService(brain=resolved_brain, store_root=None)
         result = _dispatch(service, args)
         write_json(success_response(_command_name(args), result, request_id=request_id))
         raise SystemExit(0)
@@ -200,3 +211,7 @@ def main(argv: list[str] | None = None) -> None:
         payload, code = map_exception(exc, request_id=request_id)
         write_json(payload)
         raise SystemExit(code) from exc
+
+
+def main(argv: list[str] | None = None) -> None:
+    run_cli(argv)

@@ -24,6 +24,8 @@ from tests.conformance.helpers import (
     service_for_store,
 )
 from wayfinder.core.goal_store import GoalStore
+from wayfinder.core.reducer import reduce_events
+from wayfinder.core.snapshot import reduce_from_snapshot, write_snapshot
 
 pytestmark = pytest.mark.conformance
 
@@ -815,7 +817,7 @@ def test_15_36_redacted_artifact_replacement(tmp_path: Path) -> None:
     goal_id = str(created["goal"]["goal_id"])
     goal_store = GoalStore(store, goal_id)
     secret = b"token=super-secret-value"
-    original = goal_store.artifacts.write_bytes(secret, artifact_id="art_01")
+    goal_store.artifacts.write_bytes(secret, artifact_id="art_01")
     replacement = goal_store.artifacts.write_bytes(b"[REDACTED]", artifact_id="art_01_redacted")
 
     proc = run_update_via_cli(
@@ -851,9 +853,6 @@ def test_15_36_redacted_artifact_replacement(tmp_path: Path) -> None:
 
 def test_15_13_replay_from_snapshot(tmp_path: Path) -> None:
     """§15.13: snapshot replay reconstructs the same status as full replay."""
-    from wayfinder.core.reducer import reduce_events
-    from wayfinder.core.snapshot import reduce_from_snapshot, write_snapshot
-
     workspace = tmp_path / "project"
     workspace.mkdir()
     store = tmp_path / "store"

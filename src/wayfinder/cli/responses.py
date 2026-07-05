@@ -15,6 +15,7 @@ from wayfinder.core.errors import (
     StorageConflictError,
 )
 from wayfinder.core.hash_chain import CorruptEventLogError
+from wayfinder.llm.errors import LLMConfigError, LLMError
 
 PROTOCOL_VERSION = "0.1"
 
@@ -87,7 +88,7 @@ def map_exception(
 ) -> tuple[dict[str, Any], int]:
     if isinstance(exc, InvalidInputError):
         code = "invalid_input"
-    elif isinstance(exc, SchemaValidationError):
+    elif isinstance(exc, (SchemaValidationError, LLMConfigError, LLMError)):
         code = "invalid_input"
     elif isinstance(exc, StorageConflictError):
         code = "storage_conflict"

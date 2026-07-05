@@ -24,6 +24,9 @@ from tests.conformance.helpers import (
     write_exec_playbook,
     write_playbook,
 )
+from wayfinder.core.artifacts import ArtifactStore
+from wayfinder.core.errors import ArtifactIntegrityError
+from wayfinder.exec.loop import ExecutorConfig, ExecutorLoop
 
 pytestmark = pytest.mark.conformance
 
@@ -420,10 +423,6 @@ def test_15_8_human_override_replacement(tmp_path: Path) -> None:
 
 def test_15_11_partial_artifact_write(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """§15.11: failed artifact verification does not produce invalid references."""
-    from wayfinder.core.artifacts import ArtifactStore
-    from wayfinder.core.errors import ArtifactIntegrityError
-    from wayfinder.exec.loop import ExecutorConfig, ExecutorLoop
-
     workspace = tmp_path / "project"
     workspace.mkdir()
     store = tmp_path / "store"
@@ -471,4 +470,3 @@ def test_15_11_partial_artifact_write(tmp_path: Path, monkeypatch: pytest.Monkey
     assert artifacts == []
     assert "stdout_artifact" not in action_result.get("output", {})
     assert "stderr_artifact" not in action_result.get("output", {})
-

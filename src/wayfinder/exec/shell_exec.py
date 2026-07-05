@@ -170,7 +170,6 @@ def _write_verified_artifact(
     )
     try:
         artifact_store.verify_reference(ref)
-        return ref
     except ArtifactIntegrityError:
         ref = artifact_store.write_bytes(
             content,
@@ -179,7 +178,9 @@ def _write_verified_artifact(
             description=description,
         )
         artifact_store.verify_reference(ref)
+    else:
         return ref
+    return ref
 
 
 def build_action_result(
