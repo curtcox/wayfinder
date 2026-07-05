@@ -110,6 +110,18 @@ class WayfinderClient:
     def verify(self, goal_id: str) -> dict[str, Any]:
         return self._run(["verify", "--goal-id", goal_id, "--format=json"])
 
+    def explain(self, goal_id: str, recommendation_id: str) -> dict[str, Any]:
+        return self._run(
+            [
+                "explain",
+                "--goal-id",
+                goal_id,
+                "--recommendation-id",
+                recommendation_id,
+                "--format=json",
+            ],
+        )
+
     def history(self, goal_id: str, *, since_seq: int = 0) -> list[dict[str, Any]]:
         proc = subprocess.run(  # nosec B603
             self._args(
