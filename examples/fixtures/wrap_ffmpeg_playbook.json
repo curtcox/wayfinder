@@ -1,0 +1,77 @@
+{
+  "rules": [
+    {
+      "match": {
+        "goal_status": "pending",
+        "open_recommendation_id": {"$null": true}
+      },
+      "recommendation": {
+        "recommendation_type": "action",
+        "summary": "Transcode a generated clip to H.264 MP4.",
+        "goal_status": "running",
+        "confidence": 0.9,
+        "action": {
+          "kind": "shell",
+          "title": "ffmpeg transcode",
+          "shell": {
+            "argv": [
+              "ffmpeg",
+              "-y",
+              "-f",
+              "lavfi",
+              "-i",
+              "testsrc=duration=1:size=320x240:rate=1",
+              "-pix_fmt",
+              "yuv420p",
+              "output.mp4"
+            ],
+            "command_for_display": "ffmpeg -f lavfi -i testsrc ... output.mp4",
+            "cwd": "{workspace_uri}",
+            "env": {"mode": "minimal", "set": {}},
+            "stdin": {"mode": "none"},
+            "pty": false,
+            "timeout_seconds": 120,
+            "expected_exit_codes": [0],
+            "requires_shell": false
+          },
+          "preconditions": [],
+          "success_criteria": []
+        },
+        "idempotency": {
+          "level": "strong",
+          "key": "idem_{goal_id}_ffmpeg",
+          "scope": "workspace",
+          "safe_to_retry": true,
+          "safe_to_run_if_already_done": true,
+          "detects_noop": false,
+          "dedupe_strategy": "idempotency_key",
+          "partial_failure_recovery": "retry",
+          "max_attempts": 1
+        },
+        "risk": {
+          "level": "low",
+          "classes": ["execute_local", "write_workspace"],
+          "blast_radius": "workspace",
+          "requires_approval": false,
+          "destructive": false,
+          "network": "not_required",
+          "secrets": "not_required",
+          "rollback": {"available": false, "kind": "unknown", "instructions": null}
+        }
+      }
+    },
+    {
+      "match": {
+        "completed_steps": {"$gte": 1},
+        "open_recommendation_id": {"$null": true}
+      },
+      "recommendation": {
+        "recommendation_type": "done",
+        "summary": "Transcode finished.",
+        "goal_status": "running",
+        "confidence": 0.95,
+        "done": {"reason": "output.mp4 created."}
+      }
+    }
+  ]
+}

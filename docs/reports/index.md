@@ -3,19 +3,26 @@
 Quality and conformance reports are published here automatically on every push
 to `main`.
 
-## Current Reports
+## Published Reports
 
 The `main` workflow publishes:
 
-- pytest HTML report
-- coverage HTML report
-- coverage JSON
+- [pytest HTML report](pytest/report.html)
+- [coverage HTML report](coverage/index.html)
+- [coverage JSON](coverage/coverage.json)
+- [conformance matrix](conformance.html) — Appendix B vectors §15.1–§15.38
+- [scripted examples](examples.html) — every `examples/*/run.sh --scripted` run
+- tool summaries for ruff, mypy, bandit, and pip-audit
 
-## Coming Soon
+Reports are stamped with the commit SHA and build date on the index page.
 
-Later phases will add:
+## Local Preview
 
-- conformance matrix (Appendix B test vectors §15.1–§15.38)
-- ruff, mypy, bandit, and pip-audit summaries
+After a local `make check`, generate the same report pages with:
 
-Reports are stamped with the commit SHA and build date and linked from this page.
+```bash
+uv run python scripts/build_reports.py --reports-dir reports-out --site-reports-dir site/reports
+```
+
+The static site build copies this stub; the `main` workflow overwrites
+`site/reports/index.html` with the generated report hub during deployment.

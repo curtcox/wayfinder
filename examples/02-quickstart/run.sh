@@ -36,7 +36,7 @@ wf --store "$STORE" update --goal-id "$GOAL_ID" <<EOF
   "issued_event_seq": ${SEQ},
   "issued_event_hash": "${HASH}",
   "created_at": "2026-07-05T12:01:00Z",
-  "actor": {"type": "human", "id": "example", "authority": "owner", "authenticated": true},
+  "actor": {"type": "human", "id": "${EXAMPLE_USER}", "authority": "owner", "authenticated": true},
   "update_type": "recommendation_disposition",
   "recommendation_disposition": {"disposition": "accepted"}
 }
@@ -53,7 +53,7 @@ wf --store "$STORE" update --goal-id "$GOAL_ID" <<EOF
   "issued_event_seq": ${SEQ},
   "issued_event_hash": "${HASH}",
   "created_at": "2026-07-05T12:02:00Z",
-  "actor": {"type": "human", "id": "example", "authority": "owner", "authenticated": true},
+  "actor": {"type": "human", "id": "${EXAMPLE_USER}", "authority": "owner", "authenticated": true},
   "update_type": "action_started",
   "action_started": {"started_at": "2026-07-05T12:02:00Z"}
 }
@@ -72,7 +72,7 @@ wf --store "$STORE" update --goal-id "$GOAL_ID" <<EOF
   "issued_event_seq": ${SEQ},
   "issued_event_hash": "${HASH}",
   "created_at": "2026-07-05T12:03:00Z",
-  "actor": {"type": "human", "id": "example", "authority": "owner", "authenticated": true},
+  "actor": {"type": "human", "id": "${EXAMPLE_USER}", "authority": "owner", "authenticated": true},
   "update_type": "action_result",
   "action_result": {
     "status": "completed",
@@ -104,7 +104,7 @@ wf --store "$STORE" update --goal-id "$GOAL_ID" <<EOF
   "issued_event_seq": ${DONE_SEQ},
   "issued_event_hash": "${DONE_HASH}",
   "created_at": "2026-07-05T12:04:00Z",
-  "actor": {"type": "human", "id": "example", "authority": "owner", "authenticated": true},
+  "actor": {"type": "human", "id": "${EXAMPLE_USER}", "authority": "owner", "authenticated": true},
   "update_type": "recommendation_disposition",
   "recommendation_disposition": {"disposition": "accepted"}
 }

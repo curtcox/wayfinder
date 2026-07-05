@@ -4,6 +4,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
+EXAMPLE_USER="$(id -un 2>/dev/null || echo example)"
 
 SCRIPTED=0
 for arg in "$@"; do
@@ -35,7 +36,7 @@ SUB_CREATED="$(uv run wayfinder --store "$SUB_STORE" --brain-playbook "$SUB_PLAY
   "protocol_version": "0.1",
   "create_id": "create_sub_01",
   "created_at": "2026-07-05T12:00:00Z",
-  "actor": {"type": "human", "id": "example", "authority": "owner", "authenticated": true},
+  "actor": {"type": "human", "id": "${EXAMPLE_USER}", "authority": "owner", "authenticated": true},
   "description": "Generate changelog since v2.3.0",
   "workspace_uri": "file:$WORKSPACE/project",
   "policy": {"max_auto_risk_level": "low"}
@@ -134,7 +135,7 @@ PARENT_CREATED="$(uv run wayfinder --store "$PARENT_STORE" --brain-playbook "$PA
   "protocol_version": "0.1",
   "create_id": "create_parent_01",
   "created_at": "2026-07-05T12:00:00Z",
-  "actor": {"type": "human", "id": "example", "authority": "owner", "authenticated": true},
+  "actor": {"type": "human", "id": "${EXAMPLE_USER}", "authority": "owner", "authenticated": true},
   "description": "Cut and publish release 2.4.0",
   "workspace_uri": "file:$WORKSPACE/project",
   "policy": {"max_auto_risk_level": "low"}

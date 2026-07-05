@@ -1,0 +1,67 @@
+{
+  "rules": [
+    {
+      "match": {
+        "goal_status": "pending",
+        "open_recommendation_id": {"$null": true}
+      },
+      "recommendation": {
+        "recommendation_type": "action",
+        "summary": "Run a command that needs explicit approval.",
+        "goal_status": "running",
+        "confidence": 0.9,
+        "action": {
+          "kind": "shell",
+          "title": "Approved no-op",
+          "shell": {
+            "argv": ["true"],
+            "command_for_display": "true",
+            "cwd": "{workspace_uri}",
+            "env": {"mode": "minimal", "set": {}},
+            "stdin": {"mode": "none"},
+            "pty": false,
+            "timeout_seconds": 60,
+            "expected_exit_codes": [0],
+            "requires_shell": false
+          },
+          "preconditions": [],
+          "success_criteria": []
+        },
+        "idempotency": {
+          "level": "strong",
+          "key": "idem_{goal_id}_approved_true",
+          "scope": "workspace",
+          "safe_to_retry": true,
+          "safe_to_run_if_already_done": true,
+          "detects_noop": false,
+          "dedupe_strategy": "idempotency_key",
+          "partial_failure_recovery": "retry",
+          "max_attempts": 1
+        },
+        "risk": {
+          "level": "medium",
+          "classes": ["execute_local"],
+          "blast_radius": "workspace",
+          "requires_approval": true,
+          "destructive": false,
+          "network": "not_required",
+          "secrets": "not_required",
+          "rollback": {"available": false, "kind": "unknown", "instructions": null}
+        }
+      }
+    },
+    {
+      "match": {
+        "completed_steps": {"$gte": 1},
+        "open_recommendation_id": {"$null": true}
+      },
+      "recommendation": {
+        "recommendation_type": "done",
+        "summary": "Approved action finished.",
+        "goal_status": "running",
+        "confidence": 0.95,
+        "done": {"reason": "Approved action completed."}
+      }
+    }
+  ]
+}

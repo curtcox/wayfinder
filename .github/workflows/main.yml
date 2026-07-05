@@ -39,14 +39,26 @@ jobs:
           curl -sSfL https://github.com/lycheeverse/lychee/releases/download/lychee-v0.9.0/lychee-x86_64-unknown-linux-gnu.tar.gz \
             | tar xz -C /usr/local/bin lychee
 
+      - name: Install jq and make
+        run: sudo apt-get update && sudo apt-get install -y jq make
+
       - name: Lint and analysis
-        run: make lint typecheck security complexity docs-lint
+        run: |
+          mkdir -p reports-out/tools
+          set +e
+          uv run ruff check . > reports-out/tools/ruff.txt 2>&1
+          uv run mypy > reports-out/tools/mypy.txt 2>&1
+          uv run bandit -r src -c pyproject.toml > reports-out/tools/bandit.txt 2>&1
+          uv run pip-audit > reports-out/tools/pip-audit.txt 2>&1
+          set -e
+          make lint typecheck security complexity docs-lint
 
       - name: Run tests with reports
         run: |
           mkdir -p reports-out/pytest reports-out/coverage
           uv run pytest -n auto \
             --html=reports-out/pytest/report.html --self-contained-html \
+            --junitxml=reports-out/pytest/junit.xml \
             --cov=wayfinder --cov-report=html:reports-out/coverage \
             --cov-report=json:reports-out/coverage/coverage.json \
             --cov-fail-under=80
@@ -62,24 +74,12 @@ jobs:
           mkdir -p site/reports
           cp -r reports-out/pytest site/reports/
           cp -r reports-out/coverage site/reports/
+          cp -r reports-out/tools site/reports/
           SHA=$(git rev-parse HEAD)
-          DATE=$(date -u +"%Y-%m-%d %H:%M UTC")
-          cat > site/reports/index.html <<EOF
-          <!DOCTYPE html>
-          <html lang="en">
-          <head><meta charset="utf-8"><title>Wayfinder Reports</title></head>
-          <body>
-          <h1>Wayfinder Reports</h1>
-          <p>Commit <code>${SHA}</code> · ${DATE}</p>
-          <ul>
-            <li><a href="pytest/report.html">pytest HTML report</a></li>
-            <li><a href="coverage/index.html">coverage HTML report</a></li>
-            <li><a href="coverage/coverage.json">coverage badge JSON</a></li>
-          </ul>
-          <p>Conformance matrix and tool summaries arrive in Phase 3.</p>
-          </body>
-          </html>
-          EOF
+          uv run python scripts/build_reports.py \
+            --reports-dir reports-out \
+            --site-reports-dir site/reports \
+            --sha "$SHA"
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
