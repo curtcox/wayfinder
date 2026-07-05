@@ -84,13 +84,20 @@ def _capture_examples(root: Path) -> list[dict[str, str]]:
         )
         combined = (proc.stdout + proc.stderr).strip()
         last_line = combined.splitlines()[-1] if combined else ""
-        if proc.returncode != 0 and not last_line:
-            last_line = f"exit {proc.returncode}"
+        if proc.returncode == 0 and last_line.startswith("skip "):
+            status = "skip"
+            detail = last_line
+        elif proc.returncode == 0:
+            status = "pass"
+            detail = last_line
+        else:
+            status = "fail"
+            detail = last_line or f"exit {proc.returncode}"
         rows.append(
             {
                 "name": script.parent.name,
-                "status": "pass" if proc.returncode == 0 else "fail",
-                "detail": last_line,
+                "status": status,
+                "detail": detail,
             },
         )
     return rows
@@ -216,6 +223,7 @@ def build_reports(
         "conformance_pass": sum(1 for row in conformance if row["status"] == "pass"),
         "conformance_total": len(conformance),
         "examples_pass": sum(1 for row in examples if row["status"] == "pass"),
+        "examples_skip": sum(1 for row in examples if row["status"] == "skip"),
         "examples_total": len(examples),
     }
     (site_reports_dir / "summary.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")

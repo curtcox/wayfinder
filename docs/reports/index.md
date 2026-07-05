@@ -12,6 +12,7 @@ The `main` workflow publishes:
 - [coverage JSON](coverage/coverage.json)
 - [conformance matrix](conformance.html) — Appendix B vectors §15.1–§15.38
 - [scripted examples](examples.html) — every `examples/*/run.sh --scripted` run
+  (live-only service examples show as **skip** in CI)
 - tool summaries for ruff, mypy, bandit, and pip-audit
 
 Reports are stamped with the commit SHA and build date on the index page.

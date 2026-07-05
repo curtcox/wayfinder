@@ -1,0 +1,24 @@
+{
+  "auto_execute": {
+    "max_risk_level": "medium",
+    "allowed_classes": [
+      "read_local",
+      "execute_local",
+      "write_workspace",
+      "network_read",
+      "network_write",
+      "external_side_effect"
+    ],
+    "denied_classes": [
+      "delete",
+      "write_host",
+      "secrets_access",
+      "privileged",
+      "cost",
+      "irreversible"
+    ]
+  },
+  "shell": {
+    "allow_browser_steps": true
+  }
+}

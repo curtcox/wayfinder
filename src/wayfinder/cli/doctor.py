@@ -88,6 +88,23 @@ def _env_status(env_var: str, *, section: str, name: str) -> DoctorCheck:
     )
 
 
+def _example_status(
+    *,
+    check_id: str,
+    section: str,
+    name: str,
+    ready: bool,
+    detail: str,
+) -> DoctorCheck:
+    return DoctorCheck(
+        check_id=check_id,
+        section=section,
+        name=name,
+        status="ready" if ready else "missing",
+        detail=detail,
+    )
+
+
 def run_doctor() -> dict[str, Any]:
     """Collect readiness checks for core tools, machines, and credentials."""
     checks: list[DoctorCheck] = [
@@ -133,6 +150,56 @@ def run_doctor() -> dict[str, Any]:
             detail=str(exc),
         )
     checks.append(llm_check)
+
+    temporal_host = os.environ.get("TEMPORAL_ADDRESS", "localhost:7233")
+    host, _, port = temporal_host.partition(":")
+    port = port or "7233"
+    temporal_ready = False
+    try:
+        import socket
+
+        with socket.create_connection((host, int(port)), timeout=1.0):
+            temporal_ready = True
+    except OSError:
+        temporal_ready = False
+
+    checks.extend(
+        [
+            _example_status(
+                check_id="example.07-wrap",
+                section="examples",
+                name="§7.1 wrap (ffmpeg)",
+                ready=shutil.which("ffmpeg") is not None,
+                detail="ffmpeg on PATH" if shutil.which("ffmpeg") else "install ffmpeg for §7.1",
+            ),
+            _example_status(
+                check_id="example.09-bridge-gh",
+                section="examples",
+                name="§9.4 bridge gh",
+                ready=bool(os.environ.get("GITHUB_TOKEN", "").strip())
+                and bool(os.environ.get("WAYFINDER_BRIDGE_REPO", "").strip()),
+                detail="set GITHUB_TOKEN and WAYFINDER_BRIDGE_REPO for live bridge example",
+            ),
+            _example_status(
+                check_id="example.09-temporal",
+                section="examples",
+                name="§9.6 exec-temporal",
+                ready=temporal_ready,
+                detail=f"start Temporal at {temporal_host} (temporal server start-dev)",
+            ),
+            _example_status(
+                check_id="example.09-web",
+                section="examples",
+                name="§9.10 wayfinder-web",
+                ready=importlib.util.find_spec("playwright") is not None,
+                detail=(
+                    "playwright installed"
+                    if importlib.util.find_spec("playwright") is not None
+                    else "uv sync --extra machines && uv run playwright install chromium"
+                ),
+            ),
+        ],
+    )
 
     required = {check.check_id for check in checks if check.section == "core" and check.check_id != "wayfinder.version"}
     optional_missing = [check for check in checks if check.status == "missing" and check.check_id not in required]

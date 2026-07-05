@@ -79,7 +79,8 @@ jobs:
           uv run python scripts/build_reports.py \
             --reports-dir reports-out \
             --site-reports-dir site/reports \
-            --sha "$SHA"
+            --sha "$SHA" \
+            --examples-json reports-out/examples.json
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3

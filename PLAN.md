@@ -6,9 +6,11 @@ The repository currently contains the Phase 2 protocol core library under
 `src/wayfinder/core/` and its pytest suite, a runnable CLI and executor (Phases
 3–4), LLM/prose front-ends (Phases 5–6), optional §9 machines (Phase 7),
 deference integration (Phase 8), and Phase 9 setup/doctor/examples harness.
-Remaining Phase 9 work: richer setup credential prompts (interactive LLM/service
-configuration) is implemented; optional §9 service-machine example scripts
-(Temporal, gh bridge, web) remain live-only when secrets are configured.
+Remaining Phase 9 work is complete: interactive setup credential prompts, the full
+`examples/` harness (§2–§12 plus offline §9 previews), live-only service-machine
+examples (`09-temporal`, `09-bridge-gh`, `09-web`), GitHub Pages reports with
+conformance matrix and scripted-example results, and `wayfinder doctor` per-example
+readiness.
 
 **Objective:** implement every tool needed to run the examples in
 [wayfinder-cli-user-guide.md](wayfinder-cli-user-guide.md), conforming to

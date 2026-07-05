@@ -1,0 +1,72 @@
+[
+  {
+    "name": "02-quickstart",
+    "status": "pass",
+    "detail": "\u00a72 quickstart: goal goal_b8d668f0 succeeded"
+  },
+  {
+    "name": "03-recommendation-types",
+    "status": "pass",
+    "detail": "\u00a73 recommendation types: all six types issued successfully"
+  },
+  {
+    "name": "04-executor",
+    "status": "pass",
+    "detail": "\u00a74 executor: goal goal_4eeccbca succeeded via wayfinder-exec"
+  },
+  {
+    "name": "05-audit",
+    "status": "pass",
+    "detail": "\u00a75 audit: status/history/explain/verify ok for goal_a62891c7"
+  },
+  {
+    "name": "06-updates",
+    "status": "pass",
+    "detail": "\u00a76 updates: question_answer, approval, observation, and goal_cancel ok"
+  },
+  {
+    "name": "07-wrap",
+    "status": "pass",
+    "detail": "\u00a77 wrap: goal goal_cb075d9d succeeded via wayfinder-exec --wayfinder"
+  },
+  {
+    "name": "08-prose",
+    "status": "pass",
+    "detail": "\u00a78 prose: wayfinder-tell recorded an observation for goal_a99afaa5"
+  },
+  {
+    "name": "09-bridge-gh",
+    "status": "skip",
+    "detail": "skip \u00a79.4 wayfinder-bridge gh (live-only)"
+  },
+  {
+    "name": "09-machines",
+    "status": "pass",
+    "detail": "\u00a79 machines: offline previews complete"
+  },
+  {
+    "name": "09-temporal",
+    "status": "skip",
+    "detail": "skip \u00a79.6 wayfinder-exec-temporal (live-only)"
+  },
+  {
+    "name": "09-web",
+    "status": "skip",
+    "detail": "skip \u00a79.10 wayfinder-web (live-only)"
+  },
+  {
+    "name": "10-deference",
+    "status": "pass",
+    "detail": "\u00a710 deference: parent goal_066e25df and sub goal_ae8244c5 both succeeded"
+  },
+  {
+    "name": "11-artifacts",
+    "status": "pass",
+    "detail": "\u00a711 artifacts: stdout spilled (12001 bytes) to file:.wayfinder/goals/goal_d2e6d5bf/artifacts/sha256/c3/c398d79df58142af0057918c253f64ecf196716637f7e0657b7bae0ac4b49710"
+  },
+  {
+    "name": "12-errors",
+    "status": "pass",
+    "detail": "\u00a712 errors: invalid_input and policy_denied codes verified"
+  }
+]

@@ -8,9 +8,9 @@ actions, updates, and append-only event history.
 
 Current implementation status: the protocol core library exists under
 `src/wayfinder/core/`, with a runnable `wayfinder` CLI, `wayfinder-exec`,
-LLM/prose front-ends, and optional §9 machines. Use `examples/*/run.sh
---scripted` for deterministic guide walkthroughs; see `PLAN.md` for remaining
-Phase 9 polish.
+LLM/prose front-ends, optional §9 machines, setup/doctor, and the full
+`examples/` harness. Use `examples/*/run.sh --scripted` for CI; live-only
+service examples are `09-temporal`, `09-bridge-gh`, and `09-web`.
 
 ## Important Paths
 

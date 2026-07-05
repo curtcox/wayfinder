@@ -8,14 +8,54 @@ FIXTURES="${ROOT}/examples/fixtures"
 EXAMPLE_USER="$(id -un 2>/dev/null || echo example)"
 export EXAMPLE_USER
 
-require_scripted() {
+is_scripted() {
   for arg in "$@"; do
     if [[ "$arg" == "--scripted" ]]; then
       return 0
     fi
   done
+  return 1
+}
+
+require_scripted() {
+  if is_scripted "$@"; then
+    return 0
+  fi
   echo "This example requires --scripted for CI determinism (or configure a live LLM)." >&2
   exit 1
+}
+
+skip_if_scripted() {
+  local reason="$1"
+  shift
+  if is_scripted "$@"; then
+    echo "skip ${reason}"
+    exit 0
+  fi
+}
+
+require_live_env() {
+  local name="$1"
+  if [[ -z "${!name:-}" ]]; then
+    echo "missing ${name}; export it or configure credentials for this live-only example." >&2
+    exit 1
+  fi
+}
+
+tcp_reachable() {
+  local host="$1"
+  local port="$2"
+  uv run python3 -c "
+import socket
+s = socket.socket()
+s.settimeout(1.0)
+try:
+    s.connect(('${host}', ${port}))
+except OSError:
+    raise SystemExit(1)
+finally:
+    s.close()
+" 2>/dev/null
 }
 
 require_jq() {

@@ -66,10 +66,7 @@ coverage:
 		--cov-fail-under=79
 
 examples-scripted:
-	@set -e; for script in examples/*/run.sh; do \
-		echo "==> $$script --scripted"; \
-		bash "$$script" --scripted; \
-	done
+	uv run python scripts/collect_examples.py --output reports-out/examples.json
 
 check: lint typecheck security complexity docs-lint test coverage docs-build
 

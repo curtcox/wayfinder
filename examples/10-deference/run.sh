@@ -2,35 +2,20 @@
 # §10 deference example: parent goal delegates to a sub-wayfinder store.
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-cd "$ROOT"
-EXAMPLE_USER="$(id -un 2>/dev/null || echo example)"
+source "$(dirname "${BASH_SOURCE[0]}")/../_common.sh"
+require_scripted "$@"
+require_jq
 
-SCRIPTED=0
-for arg in "$@"; do
-  case "$arg" in
-    --scripted) SCRIPTED=1 ;;
-  esac
-done
+PLAYBOOK="${ROOT}/tests/exec/fixtures/true_playbook.json"
+new_workspace
+mkdir -p "${WORKSPACE}/project"
 
-if [[ "$SCRIPTED" -ne 1 ]]; then
-  echo "This example requires --scripted until a release playbook is configured." >&2
-  exit 1
-fi
+SUB_STORE="${WORKSPACE}/sub-store"
+PARENT_STORE="${WORKSPACE}/parent-store"
+SUB_GOAL_FILE="${WORKSPACE}/subgoal.txt"
+PARENT_PLAYBOOK="${WORKSPACE}/parent_playbook.json"
 
-WORKSPACE="$(mktemp -d)"
-cleanup() { rm -rf "$WORKSPACE"; }
-trap cleanup EXIT
-
-PARENT_STORE="$WORKSPACE/parent-store"
-SUB_STORE="$WORKSPACE/sub-store"
-SUB_GOAL_FILE="$WORKSPACE/subgoal.txt"
-SUB_PLAYBOOK="$ROOT/tests/exec/fixtures/true_playbook.json"
-PARENT_PLAYBOOK="$WORKSPACE/parent_playbook.json"
-
-mkdir -p "$WORKSPACE/project"
-
-SUB_CREATED="$(uv run wayfinder --store "$SUB_STORE" --brain-playbook "$SUB_PLAYBOOK" goal create <<EOF
+SUB_CREATED="$(uv run wayfinder --store "$SUB_STORE" --brain-playbook "$PLAYBOOK" goal create <<EOF
 {
   "schema": "wip.goal_create/0.1",
   "protocol_version": "0.1",
@@ -38,7 +23,7 @@ SUB_CREATED="$(uv run wayfinder --store "$SUB_STORE" --brain-playbook "$SUB_PLAY
   "created_at": "2026-07-05T12:00:00Z",
   "actor": {"type": "human", "id": "${EXAMPLE_USER}", "authority": "owner", "authenticated": true},
   "description": "Generate changelog since v2.3.0",
-  "workspace_uri": "file:$WORKSPACE/project",
+  "workspace_uri": "file:${WORKSPACE}/project",
   "policy": {"max_auto_risk_level": "low"}
 }
 EOF
@@ -46,8 +31,8 @@ EOF
 SUB_GOAL_ID="$(printf '%s' "$SUB_CREATED" | jq -r '.result.goal.goal_id')"
 printf '%s' "$SUB_GOAL_ID" >"$SUB_GOAL_FILE"
 
-WAYFINDER_CMD="$(uv run python3 -c "import shlex, sys; print(shlex.join([sys.executable, '-m', 'wayfinder.cli', '--brain-playbook', sys.argv[1]]))" "$SUB_PLAYBOOK")"
-uv run python3 - "$PARENT_PLAYBOOK" "$WORKSPACE/project" "$SUB_STORE" "$SUB_GOAL_FILE" "$WAYFINDER_CMD" <<'PY'
+WAYFINDER_CMD="$(wayfinder_with_playbook_cmd "$PLAYBOOK")"
+uv run python3 - "$PARENT_PLAYBOOK" "${WORKSPACE}/project" "$SUB_STORE" "$SUB_GOAL_FILE" "$WAYFINDER_CMD" <<'PY'
 import json
 import sys
 from pathlib import Path
@@ -137,17 +122,18 @@ PARENT_CREATED="$(uv run wayfinder --store "$PARENT_STORE" --brain-playbook "$PA
   "created_at": "2026-07-05T12:00:00Z",
   "actor": {"type": "human", "id": "${EXAMPLE_USER}", "authority": "owner", "authenticated": true},
   "description": "Cut and publish release 2.4.0",
-  "workspace_uri": "file:$WORKSPACE/project",
+  "workspace_uri": "file:${WORKSPACE}/project",
   "policy": {"max_auto_risk_level": "low"}
 }
 EOF
 )"
 PARENT_GOAL_ID="$(printf '%s' "$PARENT_CREATED" | jq -r '.result.goal.goal_id')"
 
-uv run wayfinder-exec --store "$PARENT_STORE" --brain-playbook "$PARENT_PLAYBOOK" run --goal-id "$PARENT_GOAL_ID"
+uv run wayfinder-exec --store "$PARENT_STORE" --brain-playbook "$PARENT_PLAYBOOK" run --goal-id "$PARENT_GOAL_ID" >/dev/null
 
-echo "Parent log:"
-uv run wayfinder --store "$PARENT_STORE" history --goal-id "$PARENT_GOAL_ID" --since-seq 0 | jq -c '{seq, type}'
+PARENT_STATUS="$(uv run wayfinder --store "$PARENT_STORE" status --goal-id "$PARENT_GOAL_ID")"
+printf '%s' "$PARENT_STATUS" | jq -e '.result.goal_status == "succeeded"' >/dev/null
+SUB_STATUS="$(uv run wayfinder --store "$SUB_STORE" status --goal-id "$SUB_GOAL_ID")"
+printf '%s' "$SUB_STATUS" | jq -e '.result.goal_status == "succeeded"' >/dev/null
 
-echo "Sub log:"
-uv run wayfinder --store "$SUB_STORE" history --goal-id "$SUB_GOAL_ID" --since-seq 0 | jq -c '{seq, type}'
+echo "§10 deference: parent ${PARENT_GOAL_ID} and sub ${SUB_GOAL_ID} both succeeded"

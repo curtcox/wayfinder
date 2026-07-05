@@ -144,7 +144,13 @@ configure_credentials() {
     read -r -s -p "GITHUB_TOKEN: " github_token
     echo
     append_secret_value "github_token" "${github_token}"
-    echo "Export before using the bridge: export GITHUB_TOKEN=\"\${your-token}\""
+    export GITHUB_TOKEN="${github_token}"
+    read -r -p "Bridge scratch repo (owner/name) for examples: " bridge_repo
+    if [[ -n "${bridge_repo}" ]]; then
+      echo "Export before using the bridge:"
+      echo "  export GITHUB_TOKEN=\"\${your-token}\""
+      echo "  export WAYFINDER_BRIDGE_REPO=\"${bridge_repo}\""
+    fi
   fi
 
   if prompt_yes_no "Store BROWSERBASE_API_KEY for wayfinder-web?"; then
