@@ -2,7 +2,7 @@
   {
     "name": "02-quickstart",
     "status": "pass",
-    "detail": "\u00a72 quickstart: goal goal_b8d668f0 succeeded"
+    "detail": "\u00a72 quickstart: goal goal_cf4822c8 succeeded"
   },
   {
     "name": "03-recommendation-types",
@@ -12,12 +12,12 @@
   {
     "name": "04-executor",
     "status": "pass",
-    "detail": "\u00a74 executor: goal goal_4eeccbca succeeded via wayfinder-exec"
+    "detail": "\u00a74 executor: goal goal_34d3da38 succeeded via wayfinder-exec"
   },
   {
     "name": "05-audit",
     "status": "pass",
-    "detail": "\u00a75 audit: status/history/explain/verify ok for goal_a62891c7"
+    "detail": "\u00a75 audit: status/history/explain/verify ok for goal_082f8c44"
   },
   {
     "name": "06-updates",
@@ -27,12 +27,12 @@
   {
     "name": "07-wrap",
     "status": "pass",
-    "detail": "\u00a77 wrap: goal goal_cb075d9d succeeded via wayfinder-exec --wayfinder"
+    "detail": "\u00a77 wrap: goal goal_fd749480 succeeded via wayfinder-exec --wayfinder"
   },
   {
     "name": "08-prose",
     "status": "pass",
-    "detail": "\u00a78 prose: wayfinder-tell recorded an observation for goal_a99afaa5"
+    "detail": "\u00a78 prose: wayfinder-tell recorded an observation for goal_66e3d91d"
   },
   {
     "name": "09-bridge-gh",
@@ -57,12 +57,12 @@
   {
     "name": "10-deference",
     "status": "pass",
-    "detail": "\u00a710 deference: parent goal_066e25df and sub goal_ae8244c5 both succeeded"
+    "detail": "\u00a710 deference: parent goal_3aec644f and sub goal_4c1af947 both succeeded"
   },
   {
     "name": "11-artifacts",
     "status": "pass",
-    "detail": "\u00a711 artifacts: stdout spilled (12001 bytes) to file:.wayfinder/goals/goal_d2e6d5bf/artifacts/sha256/c3/c398d79df58142af0057918c253f64ecf196716637f7e0657b7bae0ac4b49710"
+    "detail": "\u00a711 artifacts: stdout spilled (12001 bytes) to file:.wayfinder/goals/goal_716d82bb/artifacts/sha256/c3/c398d79df58142af0057918c253f64ecf196716637f7e0657b7bae0ac4b49710"
   },
   {
     "name": "12-errors",

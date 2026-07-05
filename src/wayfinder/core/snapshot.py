@@ -129,7 +129,7 @@ def load_latest_valid_snapshot(
             continue
         try:
             validate_snapshot(loaded, events)
-        except CorruptEventLogError:
+        except (CorruptEventLogError, KeyError, TypeError, ValueError):
             continue
         return loaded
     return None

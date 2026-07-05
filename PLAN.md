@@ -17,7 +17,9 @@ race (re-check open recommendation under the append lock), repaired broken lyche
 CI downloads, restored `make lint` for the examples/scripts and reports tooling,
 aligned the xenon complexity gate with existing ruff C901 exemptions for legacy
 §9 machine and protocol-mapping code, raised overall coverage to ≥80% with
-targeted tests, and brought `make check` green locally.
+targeted tests, enforced ≥90% coverage on `wayfinder.core` in `make coverage`,
+fixed `make docs-lint` by migrating markdownlint config to
+`.markdownlint-cli2.jsonc`, and brought `make check` green locally.
 
 **Objective:** implement every tool needed to run the examples in
 [wayfinder-cli-user-guide.md](wayfinder-cli-user-guide.md), conforming to

@@ -66,6 +66,7 @@ test:
 coverage:
 	$(RUN) pytest -n auto --cov=wayfinder --cov-report=term-missing --cov-report=xml --cov-report=html \
 		--cov-fail-under=80
+	$(RUN) coverage report --include='src/wayfinder/core/*' --fail-under=90
 
 examples-scripted:
 	uv run python scripts/collect_examples.py --output reports-out/examples.json
