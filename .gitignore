@@ -3,6 +3,7 @@ site/
 docs/index.md
 docs/wayfinder-cli-user-guide.md
 docs/wayfinder-interaction-protocol-v0.1.md
+docs/wayfinder-security.md
 
 # Python
 __pycache__/
