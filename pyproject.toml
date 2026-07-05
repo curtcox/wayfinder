@@ -45,6 +45,7 @@ docs = [
 
 [project.scripts]
 wayfinder = "wayfinder.cli.main:main"
+wayfinder-exec = "wayfinder.exec.main:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -73,6 +74,8 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["D103", "PLR2004", "S101", "INP001", "TC003", "SIM117", "E501", "PERF401"]
 "tests/cli/**" = ["S603", "I001"]
+"tests/exec/**" = ["S603", "I001", "D103", "PLR2004", "S101", "INP001"]
+"tests/test_exec_cli.py" = ["S603", "I001", "D103", "S101", "INP001"]
 "hooks/**" = ["D103"]
 "src/wayfinder/cli/**" = ["D103", "D102", "D107", "PLR0913", "C901", "TC001", "TC003", "SIM102", "BLE001", "E501"]
 "src/wayfinder/cli/main.py" = ["D103", "PLR0912", "PLR0915", "C901", "PLR0911", "TRY301"]
@@ -81,6 +84,7 @@ ignore = [
 "tests/cli/test_jsonrpc.py" = ["D103", "PLR2004", "S101", "INP001", "SLF001"]
 "src/wayfinder/cli/responses.py" = ["RUF002", "SIM114"]
 "src/wayfinder/brains/**" = ["D102", "D103", "D107", "ANN401", "TC003"]
+"src/wayfinder/exec/**" = ["D103", "D102", "D107", "PLR0912", "PLR0915", "PLR0913", "PLR0911", "C901", "S603", "BLE001", "TRY301", "TRY004", "TC003", "TC001", "ANN401", "PLR2004", "RUF002", "PLC0415", "SIM108", "FURB162"]
 "src/wayfinder/core/canonical.py" = ["ANN401"]
 "src/wayfinder/core/**" = ["D102", "D107", "TC003"]
 "src/wayfinder/core/reducer.py" = ["C901", "PLR0912", "PLR0915", "SIM102"]

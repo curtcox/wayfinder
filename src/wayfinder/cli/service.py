@@ -258,7 +258,9 @@ class WayfinderService:
         existing = idempotency.get_update(update_id)
         replayed = existing is not None
         if replayed:
-            assert existing is not None
+            if existing is None:
+                msg = f"update replay state missing for {update_id}"
+                raise InvalidInputError(msg)
             digest = IdempotencyStore.canonical_hash(payload)
             if existing.canonical_hash != digest:
                 msg = f"update_id reused with different content: {update_id}"
