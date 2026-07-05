@@ -284,6 +284,18 @@ def evaluate_policy(
     auto = effective.get("auto_execute", {})
     if not isinstance(auto, dict):
         auto = {}
+    if isinstance(shell.get("x_browser_steps"), list) and shell_policy.get("allow_browser_steps"):
+        auto = copy.deepcopy(auto)
+        denied = [
+            class_name
+            for class_name in auto.get("denied_classes", [])
+            if class_name not in {"network_read", "network_write", "external_side_effect"}
+        ]
+        allowed = list(auto.get("allowed_classes", []))
+        for class_name in ("network_read", "network_write", "external_side_effect"):
+            if class_name not in allowed:
+                allowed.append(class_name)
+        auto = {**auto, "denied_classes": denied, "allowed_classes": allowed}
     risk_decision = _evaluate_risk_policy(risk, auto)
     if risk_decision is not None:
         return risk_decision

@@ -1,9 +1,10 @@
-"""Agentic coding brain: intercept shell proposals as WIP actions (§9.9)."""
+"""Browser-action brain: structured web steps as WIP shell actions (§9.10)."""
 
 from __future__ import annotations
 
 import json
 import re
+import sys
 from dataclasses import dataclass
 from typing import Any
 
@@ -11,30 +12,31 @@ from wayfinder.core.errors import InvalidInputError
 from wayfinder.llm.client import ChatClient
 from wayfinder.llm.errors import LLMError
 
-_IDEM_PREFIX = "idem_codex_"
+_IDEM_PREFIX = "idem_web_"
 _AGENT_JSON_RE = re.compile(r"\{.*\}", re.DOTALL)
+_RUNNER_ARGV = (sys.executable, "-m", "wayfinder.web.runner")
+_SIDE_EFFECT_OPS = frozenset({"click", "submit", "select"})
+_READ_ONLY_OPS = frozenset({"navigate", "await_download", "screenshot"})
 
 
 @dataclass(frozen=True)
-class CodexStep:
-    """Scripted shell step for deterministic codex runs."""
+class WebScript:
+    """Scripted browser session step for deterministic web runs."""
 
-    argv: tuple[str, ...]
     title: str
-    risk_classes: tuple[str, ...] = ("read_local", "execute_local")
+    steps: tuple[dict[str, Any], ...]
+    risk_classes: tuple[str, ...] = ("network_read",)
 
 
 @dataclass(frozen=True)
-class ToolTurn:
-    """One proposed command and its reported result."""
+class BrowserTurn:
+    """One proposed browser script and its reported result."""
 
     step: int
-    argv: list[str]
     title: str
-    exit_code: int | None
-    stdout: str
-    stderr: str
+    steps: list[dict[str, Any]]
     status: str
+    summary: str
 
 
 def _workspace_uri(goal: dict[str, Any]) -> str:
@@ -65,50 +67,41 @@ def _idempotency_key(step: int) -> str:
     return f"{_IDEM_PREFIX}{step}"
 
 
-def _parse_codex_steps(goal: dict[str, Any]) -> list[CodexStep] | None:
+def _parse_web_steps(goal: dict[str, Any]) -> list[WebScript] | None:
     metadata = goal.get("metadata")
     if not isinstance(metadata, dict):
         return None
-    raw = metadata.get("codex_steps")
+    raw = metadata.get("web_steps")
     if not isinstance(raw, list) or not raw:
         return None
-    steps: list[CodexStep] = []
+    scripts: list[WebScript] = []
     for index, item in enumerate(raw):
         if not isinstance(item, dict):
-            msg = f"codex_steps[{index}] must be an object"
+            msg = f"web_steps[{index}] must be an object"
             raise InvalidInputError(msg)
-        argv_raw = item.get("argv")
-        if not isinstance(argv_raw, list) or not all(isinstance(part, str) for part in argv_raw):
-            msg = f"codex_steps[{index}] requires argv string array"
+        steps_raw = item.get("steps")
+        if not isinstance(steps_raw, list) or not steps_raw:
+            msg = f"web_steps[{index}] requires non-empty steps array"
             raise InvalidInputError(msg)
-        title = str(item.get("title", " ".join(argv_raw)))
-        risk_raw = item.get("risk_classes", ["read_local", "execute_local"])
+        steps: list[dict[str, Any]] = []
+        for step_index, step in enumerate(steps_raw):
+            if not isinstance(step, dict) or not isinstance(step.get("op"), str):
+                msg = f"web_steps[{index}].steps[{step_index}] must include op"
+                raise InvalidInputError(msg)
+            steps.append(dict(step))
+        title = str(item.get("title", f"Browser step {index + 1}"))
+        risk_raw = item.get("risk_classes", ["network_read"])
         risk: tuple[str, ...] = ()
         if isinstance(risk_raw, list):
             risk = tuple(str(class_name) for class_name in risk_raw)
-        steps.append(
-            CodexStep(
-                argv=tuple(argv_raw),
+        scripts.append(
+            WebScript(
                 title=title,
-                risk_classes=risk or ("read_local", "execute_local"),
+                steps=tuple(steps),
+                risk_classes=risk or ("network_read",),
             ),
         )
-    return steps
-
-
-def _result_output(result: dict[str, Any]) -> tuple[str, str, int | None, str]:
-    output = result.get("output", {})
-    stdout = ""
-    stderr = ""
-    if isinstance(output, dict):
-        stdout = str(output.get("stdout", ""))
-        stderr = str(output.get("stderr", ""))
-    shell = result.get("shell", {})
-    exit_code: int | None = None
-    if isinstance(shell, dict) and isinstance(shell.get("exit_code"), int):
-        exit_code = shell["exit_code"]
-    status = str(result.get("status", "unknown"))
-    return stdout, stderr, exit_code, status
+    return scripts
 
 
 def _step_from_idempotency_key(key: str) -> int | None:
@@ -121,9 +114,18 @@ def _step_from_idempotency_key(key: str) -> int | None:
         return None
 
 
-def _tool_history_from_events(events: list[dict[str, Any]]) -> list[ToolTurn]:
-    pending: dict[int, ToolTurn] = {}
-    history: list[ToolTurn] = []
+def _result_summary(result: dict[str, Any]) -> str:
+    output = result.get("output", {})
+    if isinstance(output, dict):
+        transcript = output.get("browser_transcript") or output.get("stdout", "")
+        if transcript:
+            return str(transcript)[:500]
+    return str(result.get("status", "unknown"))
+
+
+def _browser_history_from_events(events: list[dict[str, Any]]) -> list[BrowserTurn]:
+    pending: dict[int, BrowserTurn] = {}
+    history: list[BrowserTurn] = []
     for event in events:
         event_type = str(event.get("type", ""))
         if event_type == "recommendation.issued":
@@ -141,8 +143,8 @@ def _tool_history_from_events(events: list[dict[str, Any]]) -> list[ToolTurn]:
             shell = action.get("shell", {})
             if not isinstance(shell, dict):
                 continue
-            argv = shell.get("argv")
-            if not isinstance(argv, list):
+            browser_steps = shell.get("x_browser_steps")
+            if not isinstance(browser_steps, list):
                 continue
             idempotency = recommendation.get("idempotency", {})
             key = ""
@@ -151,14 +153,12 @@ def _tool_history_from_events(events: list[dict[str, Any]]) -> list[ToolTurn]:
             step = _step_from_idempotency_key(key)
             if step is None:
                 continue
-            pending[step] = ToolTurn(
+            pending[step] = BrowserTurn(
                 step=step,
-                argv=[str(part) for part in argv],
-                title=str(action.get("title", " ".join(str(part) for part in argv))),
-                exit_code=None,
-                stdout="",
-                stderr="",
+                title=str(action.get("title", "browser action")),
+                steps=[dict(item) for item in browser_steps if isinstance(item, dict)],
                 status="issued",
+                summary="",
             )
             continue
         if event_type not in {"action.completed", "action.failed"}:
@@ -173,27 +173,24 @@ def _tool_history_from_events(events: list[dict[str, Any]]) -> list[ToolTurn]:
         step = _step_from_idempotency_key(key)
         if step is None:
             continue
-        stdout, stderr, exit_code, status = _result_output(result)
+        status = str(result.get("status", "unknown"))
+        summary = _result_summary(result)
         turn = pending.get(step)
         if turn is None:
-            turn = ToolTurn(
+            turn = BrowserTurn(
                 step=step,
-                argv=[],
                 title=f"step {step}",
-                exit_code=exit_code,
-                stdout=stdout,
-                stderr=stderr,
+                steps=[],
                 status=status,
+                summary=summary,
             )
         else:
-            turn = ToolTurn(
+            turn = BrowserTurn(
                 step=turn.step,
-                argv=turn.argv,
                 title=turn.title,
-                exit_code=exit_code,
-                stdout=stdout,
-                stderr=stderr,
+                steps=turn.steps,
                 status=status,
+                summary=summary,
             )
         pending[step] = turn
         while step in pending:
@@ -202,24 +199,34 @@ def _tool_history_from_events(events: list[dict[str, Any]]) -> list[ToolTurn]:
     return history
 
 
-def _completed_step_count(history: list[ToolTurn]) -> int:
+def _completed_step_count(history: list[BrowserTurn]) -> int:
     return sum(1 for turn in history if turn.status in {"completed", "failed"})
 
 
-def _codex_system_prompt() -> str:
+def _infer_risk_classes(steps: list[dict[str, Any]]) -> tuple[str, ...]:
+    ops = {str(step.get("op", "")) for step in steps}
+    if ops & _SIDE_EFFECT_OPS:
+        return ("network_write", "external_side_effect")
+    if ops <= _READ_ONLY_OPS:
+        return ("network_read",)
+    return ("network_read", "external_side_effect")
+
+
+def _web_system_prompt() -> str:
     return (
-        "You are wayfinder-codex, a coding agent brain for WIP v0.1. You diagnose and fix "
-        "software problems by proposing shell commands one at a time. You never execute "
-        "commands yourself — each proposal becomes an auditable shell action. "
-        "Return exactly one JSON object with these fields:\n"
-        '- decision: "run_shell" | "done" | "blocked" | "question"\n'
-        "- argv: string array (required when decision is run_shell)\n"
+        "You are wayfinder-web, a browser automation brain for WIP v0.1. You achieve goals "
+        "by proposing one browser script at a time. You never drive the browser yourself — "
+        "each proposal becomes an auditable shell action whose x_browser_steps field carries "
+        "the script. Return exactly one JSON object with these fields:\n"
+        '- decision: "run_browser" | "done" | "blocked" | "question"\n'
+        "- steps: array of step objects with op in "
+        "navigate|fill|click|await_download|screenshot\n"
         "- title: short human title for the action\n"
         "- summary: one-line recommendation summary\n"
         "- reasoning: agent reasoning surfaced via explain\n"
         "- question: prompt string (required when decision is question)\n"
         "- blocked_reason: string (required when decision is blocked)\n"
-        "Prefer minimal, inspect-first commands. Declare done only when the goal is satisfied."
+        "Use secret_ref on fill steps for credentials. Prefer inspect-first navigation."
     )
 
 
@@ -230,15 +237,15 @@ def _parse_agent_json(content: str) -> dict[str, Any]:
         candidate = re.sub(r"\n?```$", "", candidate)
     match = _AGENT_JSON_RE.search(candidate)
     if match is None:
-        msg = "codex agent response did not contain JSON"
+        msg = "web agent response did not contain JSON"
         raise LLMError(msg)
     try:
         parsed = json.loads(match.group(0))
     except json.JSONDecodeError as exc:
-        msg = f"codex agent response was not valid JSON: {exc}"
+        msg = f"web agent response was not valid JSON: {exc}"
         raise LLMError(msg) from exc
     if not isinstance(parsed, dict):
-        msg = "codex agent response must be a JSON object"
+        msg = "web agent response must be a JSON object"
         raise LLMError(msg)
     return parsed
 
@@ -246,10 +253,10 @@ def _parse_agent_json(content: str) -> dict[str, Any]:
 def _agent_messages(
     *,
     goal: dict[str, Any],
-    history: list[ToolTurn],
+    history: list[BrowserTurn],
 ) -> list[dict[str, str]]:
     messages: list[dict[str, str]] = [
-        {"role": "system", "content": _codex_system_prompt()},
+        {"role": "system", "content": _web_system_prompt()},
         {
             "role": "user",
             "content": json.dumps(
@@ -268,7 +275,7 @@ def _agent_messages(
                 "role": "assistant",
                 "content": json.dumps(
                     {
-                        "proposed_argv": turn.argv,
+                        "proposed_steps": turn.steps,
                         "title": turn.title,
                     },
                     ensure_ascii=False,
@@ -282,9 +289,7 @@ def _agent_messages(
                     {
                         "tool_result": {
                             "status": turn.status,
-                            "exit_code": turn.exit_code,
-                            "stdout": turn.stdout[:4000],
-                            "stderr": turn.stderr[:4000],
+                            "summary": turn.summary,
                         },
                     },
                     ensure_ascii=False,
@@ -347,7 +352,7 @@ def _question_recommendation(
         "goal_status": "waiting",
         "confidence": 0.8,
         "question": {
-            "question_id": f"q_codex_{step}",
+            "question_id": f"q_web_{step}",
             "prompt": prompt,
             "response_schema": {"type": "object", "additionalProperties": True},
         },
@@ -374,7 +379,7 @@ def _question_recommendation(
 
 def _action_recommendation(
     *,
-    argv: list[str],
+    steps: list[dict[str, Any]],
     title: str,
     summary: str,
     workspace_uri: str,
@@ -384,12 +389,12 @@ def _action_recommendation(
     mode: str,
     explain_mode: str,
 ) -> dict[str, Any]:
-    display = " ".join(argv)
     requires_approval = any(
         class_name in {"network_write", "external_side_effect"} for class_name in risk_classes
     )
-    network = "required" if "network_read" in risk_classes or requires_approval else "not_required"
+    network = "required"
     preview_note = " (preview only)" if mode == "preview" else ""
+    display = " ".join(_RUNNER_ARGV)
     recommendation: dict[str, Any] = {
         "recommendation_type": "action",
         "summary": summary,
@@ -400,15 +405,16 @@ def _action_recommendation(
             "kind": "shell",
             "title": title,
             "shell": {
-                "argv": argv,
+                "argv": list(_RUNNER_ARGV),
                 "command_for_display": display,
                 "cwd": workspace_uri,
                 "env": {"mode": "minimal", "set": {}},
                 "stdin": {"mode": "none"},
                 "pty": False,
-                "timeout_seconds": 600,
+                "timeout_seconds": 900,
                 "expected_exit_codes": [0],
                 "requires_shell": False,
+                "x_browser_steps": steps,
             },
             "preconditions": [],
             "success_criteria": [
@@ -429,11 +435,11 @@ def _action_recommendation(
         "risk": {
             "level": "medium" if requires_approval else "low",
             "classes": list(risk_classes),
-            "blast_radius": "workspace",
+            "blast_radius": "external",
             "requires_approval": requires_approval,
             "destructive": False,
             "network": network,
-            "secrets": "not_required",
+            "secrets": "required" if any("secret_ref" in step for step in steps) else "not_required",
             "rollback": {"available": False, "kind": "unknown", "instructions": None},
         },
         "explanation": {
@@ -441,7 +447,7 @@ def _action_recommendation(
             "summary": f"{reasoning or summary}{preview_note}",
             "evidence": [
                 {"kind": "agent_reasoning", "text": reasoning or summary},
-                {"kind": "codex_step", "step": step, "argv": argv},
+                {"kind": "browser_steps", "step": step, "steps": steps},
             ],
             "redactions": [],
         },
@@ -449,23 +455,8 @@ def _action_recommendation(
     return _trim_explanation(recommendation, explain_mode)
 
 
-def _infer_risk_classes(argv: list[str]) -> tuple[str, ...]:
-    joined = " ".join(argv).lower()
-    if any(
-        marker in joined
-        for marker in ("curl ", "wget ", "ssh ", "scp ", "ansible-playbook", " gh ", "npm publish")
-    ):
-        if any(
-            marker in joined
-            for marker in ("--check", " get ", " fetch ", " status", " ls ", " list ")
-        ):
-            return ("network_read", "execute_local")
-        return ("network_write", "external_side_effect", "execute_local")
-    return ("read_local", "execute_local")
-
-
-class CodexBrain:
-    """Coding agent that issues one shell action per next call."""
+class WebBrain:
+    """Browser automation brain that issues one web script per next call."""
 
     def __init__(self, *, llm_client: ChatClient | None = None) -> None:
         self._llm_client = llm_client
@@ -480,36 +471,36 @@ class CodexBrain:
         explain_mode: str,
     ) -> dict[str, Any]:
         workspace_uri = _workspace_uri(goal)
-        history = _tool_history_from_events(events)
+        history = _browser_history_from_events(events)
         completed = _completed_step_count(history)
         progress = status.get("progress", {})
         if isinstance(progress, dict) and isinstance(progress.get("completed_steps"), int):
             completed = max(completed, progress["completed_steps"])
-        scripted = _parse_codex_steps(goal)
+        scripted = _parse_web_steps(goal)
         if scripted is not None:
             if completed >= len(scripted):
                 return _done_recommendation(
-                    summary="Scripted codex steps complete.",
-                    reasoning="All scripted agent steps finished.",
+                    summary="Scripted web steps complete.",
+                    reasoning="All scripted browser steps finished.",
                     explain_mode=explain_mode,
                 )
-            step = scripted[completed]
+            script = scripted[completed]
             return _action_recommendation(
-                argv=list(step.argv),
-                title=step.title,
-                summary=f"Codex step {completed + 1}/{len(scripted)}: {step.title}",
+                steps=[dict(step) for step in script.steps],
+                title=script.title,
+                summary=f"Web step {completed + 1}/{len(scripted)}: {script.title}",
                 workspace_uri=workspace_uri,
                 step=completed,
-                reasoning=f"Scripted codex step {completed + 1}: {step.title}",
-                risk_classes=step.risk_classes,
+                reasoning=f"Scripted browser step {completed + 1}: {script.title}",
+                risk_classes=script.risk_classes,
                 mode=mode,
                 explain_mode=explain_mode,
             )
 
         if self._llm_client is None:
             msg = (
-                "configure an LLM endpoint or provide goal.metadata.codex_steps "
-                "for deterministic codex runs"
+                "configure an LLM endpoint or provide goal.metadata.web_steps "
+                "for deterministic web runs"
             )
             raise InvalidInputError(msg)
 
@@ -546,26 +537,29 @@ class CodexBrain:
                         reasoning=reasoning,
                         explain_mode=explain_mode,
                     )
-                if decision == "run_shell":
-                    argv_raw = agent.get("argv")
-                    if not isinstance(argv_raw, list) or not argv_raw:
-                        last_error = "run_shell decision requires non-empty argv array"
+                if decision == "run_browser":
+                    steps_raw = agent.get("steps")
+                    if not isinstance(steps_raw, list) or not steps_raw:
+                        last_error = "run_browser decision requires non-empty steps array"
                     else:
-                        argv = [str(part) for part in argv_raw]
-                        title = str(agent.get("title", " ".join(argv)))
-                        summary = str(agent.get("summary", title))
-                        risk_classes = _infer_risk_classes(argv)
-                        return _action_recommendation(
-                            argv=argv,
-                            title=title,
-                            summary=summary,
-                            workspace_uri=workspace_uri,
-                            step=completed,
-                            reasoning=reasoning,
-                            risk_classes=risk_classes,
-                            mode=mode,
-                            explain_mode=explain_mode,
-                        )
+                        steps = [dict(item) for item in steps_raw if isinstance(item, dict)]
+                        if not steps or not all(isinstance(step.get("op"), str) for step in steps):
+                            last_error = "each browser step must include op"
+                        else:
+                            title = str(agent.get("title", "Browser action"))
+                            summary = str(agent.get("summary", title))
+                            risk_classes = _infer_risk_classes(steps)
+                            return _action_recommendation(
+                                steps=steps,
+                                title=title,
+                                summary=summary,
+                                workspace_uri=workspace_uri,
+                                step=completed,
+                                reasoning=reasoning,
+                                risk_classes=risk_classes,
+                                mode=mode,
+                                explain_mode=explain_mode,
+                            )
                 else:
                     last_error = f"unsupported agent decision: {decision!r}"
             messages = [
@@ -579,5 +573,5 @@ class CodexBrain:
                     ),
                 },
             ]
-        msg = f"codex agent failed after retries: {last_error}"
+        msg = f"web agent failed after retries: {last_error}"
         raise LLMError(msg)

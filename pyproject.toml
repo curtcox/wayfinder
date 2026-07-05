@@ -47,6 +47,7 @@ machines = [
     "py_trees>=2.2,<3",
     "pyperplan>=2.1",
     "pexpect>=4.9,<5",
+    "playwright>=1.49,<2",
 ]
 [project.scripts]
 wayfinder = "wayfinder.cli.main:main"
@@ -62,6 +63,8 @@ wayfinder-bt = "wayfinder.bt.main:main"
 wayfinder-plan = "wayfinder.plan.main:main"
 wayfinder-exec-pty = "wayfinder.exec_pty.main:main"
 wayfinder-codex = "wayfinder.codex.main:main"
+wayfinder-web = "wayfinder.web.main:main"
+wayfinder-exec-web = "wayfinder.exec_web.main:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -134,10 +137,19 @@ ignore = [
 "src/wayfinder/codex/**" = ["D103", "D102", "D107", "BLE001", "TRY301"]
 "tests/brains/test_plan.py" = ["D103", "PLR2004", "S101", "INP001"]
 "tests/exec/test_pty_exec.py" = ["D103", "PLR2004", "S101", "INP001", "S108"]
+"tests/exec/test_web_exec.py" = ["D103", "PLR2004", "S101", "INP001"]
 "tests/test_plan_cli.py" = ["S603", "INP001", "D103", "S101"]
 "tests/test_exec_pty_cli.py" = ["S603", "INP001", "D103", "S101"]
 "tests/brains/test_codex.py" = ["D103", "PLR2004", "S101", "INP001"]
 "tests/test_codex_cli.py" = ["S603", "INP001", "D103", "S101"]
+"src/wayfinder/brains/web.py" = ["D102", "D103", "C901", "PLR0912", "PLR0911", "PLR0913", "PLR0915", "ANN401", "E501", "TC001"]
+"src/wayfinder/web/**" = ["D103", "D102", "D107", "BLE001", "TRY301"]
+"src/wayfinder/exec/web_exec.py" = ["D103", "D102", "C901", "PLR0912", "PLR0915", "ANN401", "PLC0415", "BLE001", "TRY003"]
+"src/wayfinder/exec/web_loop.py" = ["D103", "D102"]
+"src/wayfinder/exec_web/**" = ["D103", "D102", "D107", "BLE001", "TRY301"]
+"tests/brains/test_web.py" = ["D103", "PLR2004", "S101", "INP001"]
+"tests/test_web_cli.py" = ["S603", "INP001", "D103", "S101"]
+"tests/test_exec_web_cli.py" = ["S603", "INP001", "D103", "S101"]
 "tests/brains/test_make.py" = ["D103", "PLR2004", "S101", "INP001"]
 "tests/brains/test_bt.py" = ["D103", "PLR2004", "S101", "INP001"]
 "tests/test_bt_cli.py" = ["S603", "INP001", "D103", "S101"]
@@ -179,6 +191,10 @@ ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = "pexpect.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "playwright.*"
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
