@@ -43,6 +43,9 @@ docs = [
     "mkdocs>=1.6,<2",
     "mkdocs-material>=9.5,<10",
 ]
+machines = [
+    "py_trees>=2.2,<3",
+]
 [project.scripts]
 wayfinder = "wayfinder.cli.main:main"
 wayfinder-exec = "wayfinder.exec.main:main"
@@ -53,6 +56,7 @@ wayfinder-ask = "wayfinder.ask.main:main"
 wayfinder-chat = "wayfinder.chat.main:main"
 wayfinder-make = "wayfinder.make.main:main"
 wayfinder-tw = "wayfinder.tw.main:main"
+wayfinder-bt = "wayfinder.bt.main:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -113,7 +117,11 @@ ignore = [
 "src/wayfinder/make/**" = ["D103", "D102", "D107", "BLE001", "TRY301"]
 "src/wayfinder/brains/tw.py" = ["D102", "D103", "S603", "PLR0913", "C901", "PLR0912", "PLR2004"]
 "src/wayfinder/tw/**" = ["D103", "D102", "D107", "BLE001", "TRY301"]
+"src/wayfinder/brains/bt.py" = ["D102", "D103", "S603", "PLR0913", "C901", "PLR0912", "ANN401", "N802", "PLC0415", "PLR0915", "E501", "TC006"]
+"src/wayfinder/bt/**" = ["D103", "D102", "D107", "BLE001", "TRY301", "S105"]
 "tests/brains/test_make.py" = ["D103", "PLR2004", "S101", "INP001"]
+"tests/brains/test_bt.py" = ["D103", "PLR2004", "S101", "INP001"]
+"tests/test_bt_cli.py" = ["S603", "INP001", "D103", "S101"]
 "tests/test_make_cli.py" = ["S603", "INP001", "D103", "S101"]
 "tests/brains/test_tw.py" = ["D103", "PLR2004", "S101", "INP001", "D107", "D102", "C901"]
 "tests/test_tw_cli.py" = ["S603", "INP001", "D103", "S101"]
@@ -141,6 +149,14 @@ disallow_untyped_defs = false
 [[tool.mypy.overrides]]
 module = "jsonschema.*"
 ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "py_trees.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "wayfinder.brains.bt"
+disable_error_code = ["misc"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

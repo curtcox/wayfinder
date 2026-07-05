@@ -9,10 +9,10 @@ BIN = $(VENV)/bin
 HAS_UV := $(shell command -v $(UV) >/dev/null 2>&1 && echo 1)
 
 ifeq ($(HAS_UV),1)
-INSTALL = $(UV) sync --extra dev --extra docs
+INSTALL = $(UV) sync --extra dev --extra docs --extra machines
 RUN = $(UV) run
 else
-INSTALL = $(PYTHON) -m venv $(VENV) && $(BIN)/pip install -e ".[dev,docs]"
+INSTALL = $(PYTHON) -m venv $(VENV) && $(BIN)/pip install -e ".[dev,docs,machines]"
 RUN = $(BIN)/
 endif
 

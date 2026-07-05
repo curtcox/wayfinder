@@ -1,0 +1,75 @@
+{
+  "name": "staging-health",
+  "root": {
+    "type": "repeat",
+    "name": "health_loop",
+    "child": {
+      "type": "sequence",
+      "name": "check_cycle",
+      "children": [
+        {
+          "type": "wait",
+          "name": "interval_wait",
+          "interval_seconds": 900,
+          "summary": "Wait until next check interval"
+        },
+        {
+          "type": "action",
+          "name": "probe_healthz",
+          "title": "probe /healthz",
+          "argv": ["curl", "-sf", "http://localhost/healthz"],
+          "timeout_seconds": 30,
+          "risk_classes": ["read_local", "execute_local", "network_write"]
+        },
+        {
+          "type": "selector",
+          "name": "recovery",
+          "children": [
+            {
+              "type": "condition",
+              "name": "probe_ok",
+              "check": "action_success:probe_healthz"
+            },
+            {
+              "type": "sequence",
+              "name": "remediation",
+              "children": [
+                {
+                  "type": "action",
+                  "name": "restart_app",
+                  "title": "restart app service",
+                  "argv": ["systemctl", "restart", "app"]
+                },
+                {
+                  "type": "action",
+                  "name": "probe_after_restart",
+                  "title": "probe /healthz",
+                  "argv": ["curl", "-sf", "http://localhost/healthz"],
+                  "timeout_seconds": 30,
+                  "risk_classes": ["read_local", "execute_local", "network_write"]
+                },
+                {
+                  "type": "selector",
+                  "name": "escalation",
+                  "children": [
+                    {
+                      "type": "condition",
+                      "name": "restart_worked",
+                      "check": "action_success:probe_after_restart"
+                    },
+                    {
+                      "type": "question",
+                      "name": "escalate",
+                      "prompt": "Health check still failing after restart. How should we escalate?",
+                      "summary": "Escalate to human operator"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "name": "test-check",
+  "root": {
+    "type": "sequence",
+    "name": "simple",
+    "children": [
+      {
+        "type": "action",
+        "name": "echo_ok",
+        "title": "echo ok",
+        "argv": ["echo", "ok"]
+      }
+    ]
+  }
+}
