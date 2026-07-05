@@ -1635,6 +1635,7 @@ name = "wayfinder"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "httpx" },
     { name = "jsonschema" },
     { name = "rfc8785" },
 ]
@@ -1642,7 +1643,6 @@ dependencies = [
 [package.optional-dependencies]
 dev = [
     { name = "bandit" },
-    { name = "httpx" },
     { name = "hypothesis" },
     { name = "mypy" },
     { name = "pip-audit" },
@@ -1659,15 +1659,11 @@ docs = [
     { name = "mkdocs" },
     { name = "mkdocs-material" },
 ]
-llm = [
-    { name = "httpx" },
-]
 
 [package.metadata]
 requires-dist = [
     { name = "bandit", marker = "extra == 'dev'", specifier = ">=1.7,<2" },
-    { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.28,<1" },
-    { name = "httpx", marker = "extra == 'llm'", specifier = ">=0.28,<1" },
+    { name = "httpx", specifier = ">=0.28,<1" },
     { name = "hypothesis", marker = "extra == 'dev'", specifier = ">=6,<7" },
     { name = "jsonschema", specifier = ">=4.23,<5" },
     { name = "mkdocs", marker = "extra == 'docs'", specifier = ">=1.6,<2" },
@@ -1684,7 +1680,7 @@ requires-dist = [
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.8,<1" },
     { name = "xenon", marker = "extra == 'dev'", specifier = ">=0.9,<1" },
 ]
-provides-extras = ["dev", "docs", "llm"]
+provides-extras = ["dev", "docs"]
 
 [[package]]
 name = "xenon"

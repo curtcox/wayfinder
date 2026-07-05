@@ -71,3 +71,24 @@ def test_enforce_wrap_risk_adds_network_write_for_curl_post() -> None:
     assert isinstance(risk, dict)
     assert "network_write" in risk["classes"]
     assert risk["requires_approval"] is True
+
+
+def test_enforce_wrap_risk_adds_network_read_for_gh_status() -> None:
+    recommendation = enforce_wrap_risk(
+        _curl_action(["gh", "api", "repos/octocat/Hello-World"]),
+        tool="gh",
+    )
+    risk = recommendation["risk"]
+    assert isinstance(risk, dict)
+    assert "network_read" in risk["classes"]
+    assert risk["network"] == "required"
+
+
+def test_enforce_wrap_risk_leaves_ffmpeg_untouched() -> None:
+    recommendation = enforce_wrap_risk(
+        _curl_action(["ffmpeg", "-i", "in.mov", "out.mp4"]),
+        tool="ffmpeg",
+    )
+    risk = recommendation["risk"]
+    assert isinstance(risk, dict)
+    assert risk["network"] == "not_required"

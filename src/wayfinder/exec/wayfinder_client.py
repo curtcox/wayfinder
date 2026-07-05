@@ -72,6 +72,9 @@ class WayfinderClient:
             raise InvalidInputError(msg)
         return result
 
+    def goal_create(self, body: dict[str, Any]) -> dict[str, Any]:
+        return self._run(["goal", "create", "--format=json"], stdin=json.dumps(body))
+
     def capabilities(self) -> dict[str, Any]:
         return self._run(["capabilities", "--format=json"])
 

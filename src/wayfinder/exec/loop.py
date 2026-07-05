@@ -7,7 +7,7 @@ import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 
 from wayfinder.cli.store_paths import resolve_store_root
 from wayfinder.core.artifacts import ArtifactStore
@@ -21,6 +21,21 @@ from wayfinder.exec.shell_exec import (
     noop_action_result,
 )
 from wayfinder.exec.wayfinder_client import WayfinderClient, WayfinderClientError
+
+
+class ExecutorReporter(Protocol):
+    """Optional hooks for narrating executor progress."""
+
+    def on_recommendation(self, recommendation: dict[str, Any]) -> None: ...
+
+    def on_action_result(
+        self,
+        recommendation: dict[str, Any],
+        action_result: dict[str, Any],
+    ) -> None: ...
+
+    def on_goal_completed(self, recommendation: dict[str, Any]) -> None: ...
+
 
 NON_INTERACTIVE_EXIT_TYPES = frozenset({"question", "blocked", "unsafe"})
 LOOP_DETECT_LIMIT = 5
@@ -37,6 +52,7 @@ class ExecutorConfig:
     brain_playbook: str | None
     policy_path: Path | None
     dry_run: bool
+    reporter: ExecutorReporter | None = None
 
 
 @dataclass(frozen=True)
@@ -251,6 +267,7 @@ class ExecutorLoop:
             events = self.client.history(self.config.goal_id, since_seq=0)
             replacement = self._find_pending_replacement(events)
             if replacement is not None:
+                self._report_recommendation(replacement)
                 outcome = self._handle_recommendation(replacement, status)
                 if outcome is not None:
                     return outcome
@@ -262,6 +279,7 @@ class ExecutorLoop:
                 mode="issue",
                 explain="structured",
             )
+            self._report_recommendation(recommendation)
             outcome = self._handle_recommendation(recommendation, status)
             if outcome is not None:
                 return outcome
@@ -316,6 +334,7 @@ class ExecutorLoop:
                 extra={"recommendation_disposition": {"disposition": "accepted"}},
             )
             self._submit_update(body)
+            self._report_goal_completed(recommendation)
             return ExecutorOutcome(
                 stopped_reason="goal_completed",
                 status=self.client.status(self.config.goal_id),
@@ -541,7 +560,27 @@ class ExecutorLoop:
         self._durability.clear()
         self._loop_stall_count = 0
         self._last_stall_key = None
+        self._report_action_result(recommendation, action_result)
         return None
+
+    def _report_recommendation(self, recommendation: dict[str, Any]) -> None:
+        reporter = self.config.reporter
+        if reporter is not None:
+            reporter.on_recommendation(recommendation)
+
+    def _report_action_result(
+        self,
+        recommendation: dict[str, Any],
+        action_result: dict[str, Any],
+    ) -> None:
+        reporter = self.config.reporter
+        if reporter is not None:
+            reporter.on_action_result(recommendation, action_result)
+
+    def _report_goal_completed(self, recommendation: dict[str, Any]) -> None:
+        reporter = self.config.reporter
+        if reporter is not None:
+            reporter.on_goal_completed(recommendation)
 
     def _execute_action(self, action: dict[str, Any]) -> dict[str, Any]:
         kind = str(action.get("kind", ""))

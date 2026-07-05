@@ -19,6 +19,7 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 dependencies = [
+    "httpx>=0.28,<1",
     "jsonschema>=4.23,<5",
     "rfc8785>=0.1.4,<1",
 ]
@@ -26,7 +27,6 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "bandit>=1.7,<2",
-    "httpx>=0.28,<1",
     "hypothesis>=6,<7",
     "mypy>=1.13,<2",
     "pip-audit>=2,<3",
@@ -43,14 +43,11 @@ docs = [
     "mkdocs>=1.6,<2",
     "mkdocs-material>=9.5,<10",
 ]
-llm = [
-    "httpx>=0.28,<1",
-]
-
 [project.scripts]
 wayfinder = "wayfinder.cli.main:main"
 wayfinder-exec = "wayfinder.exec.main:main"
 wayfinder-wrap = "wayfinder.wrap.main:main"
+wayfinder-do = "wayfinder.do.main:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -102,8 +99,14 @@ ignore = [
 "src/wayfinder/core/types.py" = ["D103"]
 "src/wayfinder/llm/**" = ["D103", "D102", "D107", "PLR0913", "PLR0912", "TRY003", "BLE001", "S603", "ANN401", "TC003", "E501", "C901", "TC001"]
 "src/wayfinder/wrap/**" = ["D103", "D102", "D107", "BLE001", "TRY301"]
+"src/wayfinder/prose/**" = ["D103", "D102", "D107", "ANN401", "TC003", "E501", "C901", "TC001"]
+"src/wayfinder/do/**" = ["D103", "D102", "D107", "BLE001", "TRY301", "PLR0913", "ANN401"]
 "tests/llm/**" = ["D103", "PLR2004", "S101", "INP001", "RUF012", "A002", "SLF001"]
 "tests/brains/**" = ["D103", "PLR2004", "S101", "INP001"]
+"tests/conftest.py" = ["D101", "RUF012"]
+"tests/prose/**" = ["D103", "PLR2004", "S101", "INP001", "SLF001", "S108"]
+"tests/test_wrap_cli.py" = ["S603", "INP001", "D103", "S101"]
+"tests/test_do_cli.py" = ["S603", "INP001", "D103", "S101"]
 
 [tool.mypy]
 python_version = "3.11"

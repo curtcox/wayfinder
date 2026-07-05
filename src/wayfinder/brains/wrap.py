@@ -74,38 +74,39 @@ def _looks_like_network_write(tool: str, argv: list[str]) -> bool:
     )
 
 
-def enforce_wrap_risk(recommendation: dict[str, Any], *, tool: str) -> dict[str, Any]:
-    """Mechanically ensure wrapped tools carry honest network risk metadata."""
+def _action_argv(recommendation: dict[str, Any]) -> list[str] | None:
     if recommendation.get("recommendation_type") != "action":
-        return recommendation
+        return None
     action = recommendation.get("action")
     if not isinstance(action, dict):
-        return recommendation
+        return None
     shell = action.get("shell")
     if not isinstance(shell, dict):
-        return recommendation
+        return None
     argv = shell.get("argv")
     if not isinstance(argv, list) or not argv:
-        return recommendation
+        return None
+    return [str(item) for item in argv]
 
-    risk = recommendation.setdefault("risk", {})
-    if not isinstance(risk, dict):
-        return recommendation
 
-    if tool not in NETWORK_TOOLS and str(argv[0]) not in NETWORK_TOOLS:
-        return recommendation
+def _is_network_tool(tool: str, argv: list[str]) -> bool:
+    return tool in NETWORK_TOOLS or argv[0] in NETWORK_TOOLS
 
+
+def _risk_classes(risk: dict[str, Any]) -> list[str]:
     classes = risk.setdefault("classes", [])
     if not isinstance(classes, list):
         classes = []
         risk["classes"] = classes
+    return classes
 
-    network_write = _looks_like_network_write(tool, [str(item) for item in argv])
+
+def _apply_network_risk(risk: dict[str, Any], *, network_write: bool) -> None:
     required = NETWORK_WRITE_CLASSES if network_write else NETWORK_READ_CLASSES
+    classes = _risk_classes(risk)
     for class_name in required:
         if class_name not in classes:
             classes.append(class_name)
-
     risk["network"] = "required"
     risk["requires_approval"] = True
     if network_write:
@@ -113,6 +114,17 @@ def enforce_wrap_risk(recommendation: dict[str, Any], *, tool: str) -> dict[str,
         risk["destructive"] = bool(risk.get("destructive", True))
     else:
         risk["level"] = risk.get("level", "medium")
+
+
+def enforce_wrap_risk(recommendation: dict[str, Any], *, tool: str) -> dict[str, Any]:
+    """Mechanically ensure wrapped tools carry honest network risk metadata."""
+    argv = _action_argv(recommendation)
+    if argv is None or not _is_network_tool(tool, argv):
+        return recommendation
+    risk = recommendation.setdefault("risk", {})
+    if not isinstance(risk, dict):
+        return recommendation
+    _apply_network_risk(risk, network_write=_looks_like_network_write(tool, argv))
     return recommendation
 
 
