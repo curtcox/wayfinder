@@ -62,6 +62,9 @@ jobs:
             brew install jq
           fi
 
+      - name: Prepare canonical docs
+        run: uv run python hooks/copy_canonical_docs.py
+
       - name: make check
         run: make check
 
