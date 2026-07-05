@@ -12,6 +12,12 @@ examples (`09-temporal`, `09-bridge-gh`, `09-web`), GitHub Pages reports with
 conformance matrix and scripted-example results, and `wayfinder doctor` per-example
 readiness.
 
+Post-Phase-9 hardening in progress: fixed the §15.7 concurrent `next --mode=issue`
+race (re-check open recommendation under the append lock), repaired broken lychee
+CI downloads, and restored `make lint` for the examples/scripts and reports tooling.
+`make check` still fails on the xenon complexity gate (legacy C–E blocks) and the
+80% overall coverage gate (71% locally; core is ~84%).
+
 **Objective:** implement every tool needed to run the examples in
 [wayfinder-cli-user-guide.md](wayfinder-cli-user-guide.md), conforming to
 [wayfinder-interaction-protocol-v0.1.md](wayfinder-interaction-protocol-v0.1.md) (WIP v0.1).

@@ -24,7 +24,9 @@ class BridgeState:
         issue_number = payload.get("issue_number")
         parsed_issue = int(issue_number) if issue_number is not None else None
         comment_ids = payload.get("processed_comment_ids", [])
-        parsed_comments = [int(item) for item in comment_ids] if isinstance(comment_ids, list) else []
+        parsed_comments = (
+            [int(item) for item in comment_ids] if isinstance(comment_ids, list) else []
+        )
         return cls(
             issue_number=parsed_issue,
             last_synced_seq=int(payload.get("last_synced_seq", 0)),

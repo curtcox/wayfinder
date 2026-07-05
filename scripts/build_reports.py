@@ -40,7 +40,9 @@ def _parse_junit(path: Path) -> list[dict[str, str]]:
         skipped = case.find("skipped")
         if failure is not None or error is not None:
             status = "fail"
-            detail = (failure.text if failure is not None else error.text if error is not None else "") or ""
+            detail = (
+                failure.text if failure is not None else error.text if error is not None else ""
+            ) or ""
         elif skipped is not None:
             status = "skip"
             detail = skipped.get("message", "") or skipped.text or ""
@@ -58,7 +60,9 @@ def _parse_junit(path: Path) -> list[dict[str, str]]:
             },
         )
     rows.sort(
-        key=lambda row: [int(part) if part.isdigit() else part for part in re.findall(r"\d+|\D+", row["section"])],
+        key=lambda row: [
+            int(part) if part.isdigit() else part for part in re.findall(r"\d+|\D+", row["section"])
+        ],
     )
     return rows
 
@@ -189,7 +193,9 @@ def build_reports(
         "Conformance Matrix",
         sha=sha,
         built_at=built_at,
-        inner=_table(["Vector", "Test", "Status", "Source", "Detail"], conformance_rows, status_col=2),
+        inner=_table(
+            ["Vector", "Test", "Status", "Source", "Detail"], conformance_rows, status_col=2
+        ),
     )
     _write_html(site_reports_dir / "conformance.html", conformance_html)
 
@@ -215,7 +221,10 @@ def build_reports(
 <h2>Tool summaries</h2>
 {_table(["Tool", "Status", "Summary"], tool_rows, status_col=1)}
 """
-    _write_html(site_reports_dir / "index.html", _page("Wayfinder Reports", sha=sha, built_at=built_at, inner=index_inner))
+    _write_html(
+        site_reports_dir / "index.html",
+        _page("Wayfinder Reports", sha=sha, built_at=built_at, inner=index_inner),
+    )
 
     summary = {
         "sha": sha,
@@ -226,7 +235,9 @@ def build_reports(
         "examples_skip": sum(1 for row in examples if row["status"] == "skip"),
         "examples_total": len(examples),
     }
-    (site_reports_dir / "summary.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
+    (site_reports_dir / "summary.json").write_text(
+        json.dumps(summary, indent=2) + "\n", encoding="utf-8"
+    )
 
 
 def main() -> int:

@@ -327,20 +327,27 @@ class WayfinderService:
 
         event_templates: list[dict[str, Any]] = []
         superseded_ids: list[str] = []
-        if open_id is not None and supersede:
-            superseded_ids.append(open_id)
+        with goal_store.lock.acquire(HOLDER):
+            fresh_events = goal_store.read_events()
+            fresh_state = reduce_events(fresh_events)
+            fresh_open_id = fresh_state.open_recommendation_id
+            if fresh_open_id is not None and not supersede:
+                msg = "open executable recommendation exists; pass --supersede to replace"
+                raise StorageConflictError(msg)
+            if fresh_open_id is not None and supersede:
+                superseded_ids.append(fresh_open_id)
+                event_templates.append(
+                    self._superseded_event(
+                        goal_id=goal_id,
+                        recommendation_id=fresh_open_id,
+                        superseded_by=str(recommendation["recommendation_id"]),
+                    ),
+                )
+            recommendation["supersedes"] = superseded_ids
             event_templates.append(
-                self._superseded_event(
-                    goal_id=goal_id,
-                    recommendation_id=open_id,
-                    superseded_by=str(recommendation["recommendation_id"]),
-                ),
+                self._issued_event(goal_id=goal_id, recommendation=recommendation),
             )
-        recommendation["supersedes"] = superseded_ids
-        event_templates.append(
-            self._issued_event(goal_id=goal_id, recommendation=recommendation),
-        )
-        append_result = goal_store.append_events(event_templates, holder=HOLDER)
+            append_result = goal_store.append_while_locked(event_templates)
         issued_event = append_result.events[-1]
         data = issued_event.get("data", {})
         if not isinstance(data, dict):

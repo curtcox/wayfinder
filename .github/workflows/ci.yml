@@ -45,10 +45,10 @@ jobs:
       - name: Install lychee CLI
         run: |
           if [ "${{ runner.os }}" = "Linux" ]; then
-            curl -sSfL https://github.com/lycheeverse/lychee/releases/download/lychee-v0.9.0/lychee-x86_64-unknown-linux-gnu.tar.gz \
+            curl -sSfL https://github.com/lycheeverse/lychee/releases/download/lychee-v0.24.1/lychee-x86_64-unknown-linux-gnu.tar.gz \
               | tar xz -C /usr/local/bin lychee
           else
-            curl -sSfL https://github.com/lycheeverse/lychee/releases/download/lychee-v0.9.0/lychee-aarch64-apple-darwin.tar.gz \
+            curl -sSfL https://github.com/lycheeverse/lychee/releases/download/lychee-v0.24.1/lychee-aarch64-apple-darwin.tar.gz \
               | tar xz -C /usr/local/bin lychee
           fi
 

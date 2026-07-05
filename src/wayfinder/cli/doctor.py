@@ -201,8 +201,14 @@ def run_doctor() -> dict[str, Any]:
         ],
     )
 
-    required = {check.check_id for check in checks if check.section == "core" and check.check_id != "wayfinder.version"}
-    optional_missing = [check for check in checks if check.status == "missing" and check.check_id not in required]
+    required = {
+        check.check_id
+        for check in checks
+        if check.section == "core" and check.check_id != "wayfinder.version"
+    }
+    optional_missing = [
+        check for check in checks if check.status == "missing" and check.check_id not in required
+    ]
     ready = [check for check in checks if check.status == "ready"]
 
     return {
@@ -212,6 +218,8 @@ def run_doctor() -> dict[str, Any]:
         "missing_count": len(optional_missing),
         "checks": [check.to_dict() for check in checks],
         "summary": " · ".join(
-            f"{check.name}: {check.status}" for check in checks if check.section in {"core", "§5", "§9.4"}
+            f"{check.name}: {check.status}"
+            for check in checks
+            if check.section in {"core", "§5", "§9.4"}
         ),
     }

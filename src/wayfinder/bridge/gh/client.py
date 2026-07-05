@@ -42,7 +42,9 @@ class GitHubClient:
             raise InvalidInputError(msg)
         self._owner, self._name = parts
         self._token = token or os.environ.get("GITHUB_TOKEN", "")
-        self._api_base = (api_base or os.environ.get("GITHUB_API_BASE", "https://api.github.com")).rstrip(
+        self._api_base = (
+            api_base or os.environ.get("GITHUB_API_BASE", "https://api.github.com")
+        ).rstrip(
             "/",
         )
         self._bot_login = bot_login
@@ -73,7 +75,9 @@ class GitHubClient:
         )
         response.raise_for_status()
         data = response.json()
-        return GitHubIssue(number=int(data["number"]), title=str(data["title"]), state=str(data["state"]))
+        return GitHubIssue(
+            number=int(data["number"]), title=str(data["title"]), state=str(data["state"])
+        )
 
     def close_issue(self, issue_number: int) -> None:
         response = httpx.patch(
@@ -94,7 +98,9 @@ class GitHubClient:
         response.raise_for_status()
         data = response.json()
         user = data.get("user", {})
-        login = str(user.get("login", self._bot_login)) if isinstance(user, dict) else self._bot_login
+        login = (
+            str(user.get("login", self._bot_login)) if isinstance(user, dict) else self._bot_login
+        )
         return GitHubComment(id=int(data["id"]), user_login=login, body=str(data.get("body", "")))
 
     def list_comments(self, issue_number: int) -> list[GitHubComment]:

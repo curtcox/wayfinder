@@ -134,7 +134,9 @@ def github_stub() -> Generator[str, None, None]:
     server.shutdown()
 
 
-def _run_bridge(args: list[str], *, api_base: str, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
+def _run_bridge(
+    args: list[str], *, api_base: str, env: dict[str, str] | None = None
+) -> subprocess.CompletedProcess[str]:
     cmd = [sys.executable, "-m", "wayfinder.bridge", *args]
     merged = {**os.environ, "GITHUB_API_BASE": api_base, "GITHUB_TOKEN": "test-token"}
     if env:

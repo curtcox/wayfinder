@@ -66,12 +66,19 @@ class GoalStore:
             msg = "append requires at least one event"
             raise InvalidInputError(msg)
         with self.lock.acquire(holder):
-            appended = self.event_log.append_many(event_templates)
+            return self._append_events_unlocked(event_templates)
+
+    def _append_events_unlocked(self, event_templates: list[dict[str, Any]]) -> AppendResult:
+        appended = self.event_log.append_many(event_templates)
         return AppendResult(
             events=appended,
             seq_start=int(appended[0]["seq"]),
             seq_end=int(appended[-1]["seq"]),
         )
+
+    def append_while_locked(self, event_templates: list[dict[str, Any]]) -> AppendResult:
+        """Append events when the caller already holds this store's append lock."""
+        return self._append_events_unlocked(event_templates)
 
     def apply_update(
         self,
