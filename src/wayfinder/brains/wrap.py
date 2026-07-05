@@ -51,7 +51,25 @@ def harvest_tool_help(tool: str) -> str:
     return f"{tool} did not produce help output."
 
 
+def _ansible_system_prompt(tool_help: str) -> str:
+    return (
+        "You are wayfinder-wrap for Ansible. Drive `ansible-playbook` to achieve user goals "
+        "through WIP v0.1 shell actions. argv must start with `ansible-playbook`. "
+        "When the user asks what would change or requests preview/dry-run, recommend "
+        "`ansible-playbook --check --diff` first (network_read). The apply run uses the "
+        "same playbook without --check (network_write / external_side_effect). "
+        "Declare safe_to_run_if_already_done honestly: Ansible modules are idempotent, so "
+        "re-applying after a timeout is usually safe. Map changed=0 runs to no-op semantics. "
+        "Use the workspace_uri as shell.cwd unless inventory paths require otherwise. "
+        "Emit one recommendation JSON object without issuance metadata. "
+        "Tool reference:\n"
+        f"{tool_help}"
+    )
+
+
 def _wrap_system_prompt(tool: str, tool_help: str) -> str:
+    if tool == "ansible":
+        return _ansible_system_prompt(tool_help)
     return (
         f"You are wayfinder-wrap for `{tool}`. Your expertise is driving `{tool}` to achieve "
         "user goals through WIP v0.1 shell actions. Recommend concrete, fully-specified "
@@ -90,7 +108,13 @@ def _action_argv(recommendation: dict[str, Any]) -> list[str] | None:
 
 
 def _is_network_tool(tool: str, argv: list[str]) -> bool:
+    if tool == "ansible" or (argv and argv[0] == "ansible-playbook"):
+        return True
     return tool in NETWORK_TOOLS or argv[0] in NETWORK_TOOLS
+
+
+def _ansible_network_write(argv: list[str]) -> bool:
+    return "--check" not in " ".join(argv).lower()
 
 
 def _risk_classes(risk: dict[str, Any]) -> list[str]:
@@ -124,8 +148,23 @@ def enforce_wrap_risk(recommendation: dict[str, Any], *, tool: str) -> dict[str,
     risk = recommendation.setdefault("risk", {})
     if not isinstance(risk, dict):
         return recommendation
-    _apply_network_risk(risk, network_write=_looks_like_network_write(tool, argv))
+    if tool == "ansible" or (argv and argv[0] == "ansible-playbook"):
+        network_write = _ansible_network_write(argv)
+    else:
+        network_write = _looks_like_network_write(tool, argv)
+    _apply_network_risk(risk, network_write=network_write)
+    if tool == "ansible" or (argv and argv[0] == "ansible-playbook"):
+        idempotency = recommendation.setdefault("idempotency", {})
+        if isinstance(idempotency, dict):
+            idempotency["safe_to_run_if_already_done"] = True
     return recommendation
+
+
+def _resolved_tool_name(tool: str) -> str:
+    """Map wrap aliases to the binary whose help we harvest."""
+    if tool == "ansible":
+        return "ansible-playbook"
+    return tool
 
 
 class WrapBrain:
@@ -134,7 +173,8 @@ class WrapBrain:
     def __init__(self, tool: str, client: ChatClient, *, tool_help: str | None = None) -> None:
         self._tool = tool
         self._client = client
-        self._tool_help = tool_help if tool_help is not None else harvest_tool_help(tool)
+        binary = _resolved_tool_name(tool)
+        self._tool_help = tool_help if tool_help is not None else harvest_tool_help(binary)
 
     @classmethod
     def from_config(cls, tool: str, config: LLMConfig | None = None) -> WrapBrain:

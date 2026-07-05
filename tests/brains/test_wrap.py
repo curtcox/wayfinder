@@ -92,3 +92,43 @@ def test_enforce_wrap_risk_leaves_ffmpeg_untouched() -> None:
     risk = recommendation["risk"]
     assert isinstance(risk, dict)
     assert risk["network"] == "not_required"
+
+
+def test_enforce_wrap_risk_ansible_check_is_network_read() -> None:
+    recommendation = enforce_wrap_risk(
+        _curl_action(
+            [
+                "ansible-playbook",
+                "--check",
+                "--diff",
+                "-i",
+                "inventory/prod.ini",
+                "site.yml",
+            ],
+        ),
+        tool="ansible",
+    )
+    risk = recommendation["risk"]
+    assert isinstance(risk, dict)
+    assert "network_read" in risk["classes"]
+    assert "network_write" not in risk["classes"]
+    idempotency = recommendation["idempotency"]
+    assert isinstance(idempotency, dict)
+    assert idempotency["safe_to_run_if_already_done"] is True
+
+
+def test_enforce_wrap_risk_ansible_apply_is_network_write() -> None:
+    recommendation = enforce_wrap_risk(
+        _curl_action(
+            [
+                "ansible-playbook",
+                "-i",
+                "inventory/prod.ini",
+                "site.yml",
+            ],
+        ),
+        tool="ansible",
+    )
+    risk = recommendation["risk"]
+    assert isinstance(risk, dict)
+    assert "network_write" in risk["classes"]
