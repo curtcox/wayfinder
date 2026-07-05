@@ -25,10 +25,10 @@ def _load_default_playbook() -> dict[str, Any]:
 
 def _match_value(actual: Any, expected: Any) -> bool:
     if isinstance(expected, dict):
-        if "$gte" in expected and not (isinstance(actual, int) and actual >= expected["$gte"]):
-            return False
-        if "$lte" in expected and not (isinstance(actual, int) and actual <= expected["$lte"]):
-            return False
+        if "$gte" in expected:
+            return isinstance(actual, int) and actual >= expected["$gte"]
+        if "$lte" in expected:
+            return isinstance(actual, int) and actual <= expected["$lte"]
         if "$null" in expected:
             return (actual is None) == bool(expected["$null"])
         return False

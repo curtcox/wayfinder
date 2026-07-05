@@ -4,11 +4,44 @@ from __future__ import annotations
 
 import json
 import os
+from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from wayfinder.core.hash_chain import CorruptEventLogError, verify_hash_chain, with_event_hash
+from wayfinder.core.hash_chain import (
+    CorruptEventLogError,
+    verify_event_hash,
+    verify_hash_chain,
+    with_event_hash,
+)
+
+
+def _verify_chained_event(
+    event: dict[str, Any],
+    *,
+    expected_seq: int,
+    prev_hash: str | None,
+) -> str:
+    """Validate one event's seq, prev link, and hash; return its event_hash."""
+    seq = event.get("seq")
+    if not isinstance(seq, int):
+        msg = "event seq must be an integer"
+        raise CorruptEventLogError(msg)
+    if seq != expected_seq:
+        msg = f"invalid event seq ordering: expected {expected_seq}, got {seq}"
+        raise CorruptEventLogError(msg)
+    if seq == 1:
+        if event.get("prev_event_hash") is not None:
+            msg = "first event prev_event_hash must be null"
+            raise CorruptEventLogError(msg)
+    elif event.get("prev_event_hash") != prev_hash:
+        msg = "prev_event_hash mismatch"
+        raise CorruptEventLogError(msg)
+    if not verify_event_hash(event):
+        msg = "event_hash mismatch"
+        raise CorruptEventLogError(msg)
+    return str(event["event_hash"])
 
 
 @dataclass(frozen=True)
@@ -70,23 +103,47 @@ class EventLog:
 
     def read_raw_lines_since(self, since_seq: int, *, limit: int | None = None) -> list[str]:
         """Return verbatim stored JSONL lines with seq > since_seq (§1.4)."""
+        return list(self.iter_verified_lines_since(since_seq, limit=limit))
+
+    def iter_verified_lines_since(
+        self,
+        since_seq: int,
+        *,
+        limit: int | None = None,
+    ) -> Iterator[str]:
+        """Stream JSONL lines with incremental hash-chain verification (§1.4, §15.35)."""
         if not self.path.exists():
-            return []
-        lines: list[str] = []
+            return
+        expected_seq: int | None = None
+        prev_hash: str | None = None
+        yielded = 0
         with self.path.open(encoding="utf-8") as handle:
-            for line in handle:
+            for line_number, line in enumerate(handle, start=1):
                 if not line.strip():
                     continue
-                parsed = json.loads(line)
+                try:
+                    parsed = json.loads(line)
+                except json.JSONDecodeError as exc:
+                    msg = f"partial or invalid JSON at line {line_number}"
+                    raise CorruptEventLogError(msg) from exc
                 if not isinstance(parsed, dict):
-                    msg = "event line is not an object"
+                    msg = f"event at line {line_number} is not an object"
                     raise CorruptEventLogError(msg)
-                if int(parsed["seq"]) <= since_seq:
+                if expected_seq is None:
+                    expected_seq = int(parsed["seq"])
+                prev_hash = _verify_chained_event(
+                    parsed,
+                    expected_seq=expected_seq,
+                    prev_hash=prev_hash,
+                )
+                expected_seq += 1
+                seq = int(parsed["seq"])
+                if seq <= since_seq:
                     continue
-                lines.append(line if line.endswith("\n") else f"{line}\n")
-                if limit is not None and len(lines) >= limit:
+                yield line if line.endswith("\n") else f"{line}\n"
+                yielded += 1
+                if limit is not None and yielded >= limit:
                     break
-        return lines
 
     def _read_all_unchecked(self) -> list[dict[str, Any]]:
         if not self.path.exists():

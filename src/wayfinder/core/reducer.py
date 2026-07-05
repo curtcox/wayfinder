@@ -106,9 +106,8 @@ def _apply_event(state: StatusState, event: dict[str, Any]) -> None:
             state.reason_code = "needs_user_input"
         return
 
-    if (
-        event_type in CLEAR_OPEN_RECOMMENDATION_EVENT_TYPES
-        and _event_targets_open(event, state.open_recommendation_id)
+    if event_type in CLEAR_OPEN_RECOMMENDATION_EVENT_TYPES and _event_targets_open(
+        event, state.open_recommendation_id
     ):
         state.open_recommendation_id = None
 

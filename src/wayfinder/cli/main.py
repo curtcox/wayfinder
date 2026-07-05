@@ -11,9 +11,10 @@ from typing import Any
 
 from wayfinder.brains.scripted import ScriptedBrain
 from wayfinder.cli.jsonrpc import run_jsonrpc_server
-from wayfinder.cli.responses import map_exception, success_response, write_json, write_jsonl_lines
+from wayfinder.cli.responses import map_exception, success_response, write_json
 from wayfinder.cli.service import WayfinderService
 from wayfinder.core.errors import InvalidInputError
+from wayfinder.core.hash_chain import CorruptEventLogError
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -169,19 +170,23 @@ def main(argv: list[str] | None = None) -> None:
     if args.command == "history":
         try:
             service = WayfinderService(brain=_load_brain(args), store_root=None)
-            lines = service.history(
+            streamed = False
+            for line in service.history_iter(
                 args.goal_id,
                 since_seq=args.since_seq,
                 limit=args.limit,
                 store=args.store,
-            )
-            write_jsonl_lines(lines)
+            ):
+                streamed = True
+                sys.stdout.write(line)
+                sys.stdout.flush()
             raise SystemExit(0)
         except SystemExit:
             raise
         except BaseException as exc:
             payload, code = map_exception(exc, request_id=request_id)
-            write_json(payload)
+            if streamed or not isinstance(exc, CorruptEventLogError):
+                write_json(payload)
             raise SystemExit(code) from exc
 
     try:

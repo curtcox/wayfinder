@@ -124,7 +124,13 @@ def map_update_to_events(
             if recommendation is None:
                 msg = "accepted disposition requires issued recommendation"
                 raise InvalidInputError(msg)
-            assert_can_start_action(events, recommendation, actor_id=str(actor["id"]), now=now)
+            if recommendation.get("recommendation_type") != "done":
+                assert_can_start_action(
+                    events,
+                    recommendation,
+                    actor_id=str(actor["id"]),
+                    now=now,
+                )
             mapped.append(
                 _event_shell(
                     event_id=event_id_factory(),
@@ -317,9 +323,7 @@ def map_update_to_events(
                 actor=actor,
                 data={k: v for k, v in data.items() if v is not None},
                 correlation_id=(
-                    str(update["recommendation_id"])
-                    if update.get("recommendation_id")
-                    else None
+                    str(update["recommendation_id"]) if update.get("recommendation_id") else None
                 ),
             ),
         )

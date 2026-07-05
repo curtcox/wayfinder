@@ -6,6 +6,7 @@ import getpass
 import itertools
 import json
 import secrets
+from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -193,6 +194,18 @@ class WayfinderService:
     ) -> list[str]:
         goal_store = self._goal_store(goal_id, store=store)
         return goal_store.event_log.read_raw_lines_since(since_seq, limit=limit)
+
+    def history_iter(
+        self,
+        goal_id: str,
+        *,
+        since_seq: int,
+        limit: int | None = None,
+        store: str | None = None,
+    ) -> Iterator[str]:
+        """Yield verified JSONL history lines for streaming CLI output."""
+        goal_store = self._goal_store(goal_id, store=store)
+        return goal_store.event_log.iter_verified_lines_since(since_seq, limit=limit)
 
     def history_page(
         self,

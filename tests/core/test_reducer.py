@@ -89,7 +89,12 @@ def test_reduce_goal_cancelled() -> None:
                 "time": "2026-07-04T18:02:00Z",
                 "goal_id": "goal_01",
                 "source": "human://test",
-                "actor": {"type": "human", "id": "test", "authority": "owner", "authenticated": True},
+                "actor": {
+                    "type": "human",
+                    "id": "test",
+                    "authority": "owner",
+                    "authenticated": True,
+                },
                 "data": {"reason": "done"},
             },
         ],
