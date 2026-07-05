@@ -16,6 +16,7 @@ _CANONICAL = (
     ("README.md", "index.md"),
     ("wayfinder-cli-user-guide.md", "wayfinder-cli-user-guide.md"),
     ("wayfinder-interaction-protocol-v0.1.md", "wayfinder-interaction-protocol-v0.1.md"),
+    ("wayfinder-security.md", "wayfinder-security.md"),
 )
 
 

@@ -1,0 +1,134 @@
+{
+  "rules": [
+    {
+      "match": {
+        "goal_status": "pending",
+        "open_recommendation_id": {"$null": true},
+        "description_contains": "type:question"
+      },
+      "recommendation": {
+        "recommendation_type": "question",
+        "summary": "Need package manager choice.",
+        "goal_status": "waiting",
+        "confidence": 0.8,
+        "question": {
+          "question_id": "q_example",
+          "prompt": "Which package manager does this repository use: npm or pnpm?"
+        }
+      }
+    },
+    {
+      "match": {
+        "goal_status": "pending",
+        "open_recommendation_id": {"$null": true},
+        "description_contains": "type:wait"
+      },
+      "recommendation": {
+        "recommendation_type": "wait",
+        "summary": "Wait for the nightly window.",
+        "goal_status": "waiting",
+        "confidence": 0.7,
+        "wait": {"until_time": "2026-12-31T00:00:00Z"}
+      }
+    },
+    {
+      "match": {
+        "goal_status": "pending",
+        "open_recommendation_id": {"$null": true},
+        "description_contains": "type:blocked"
+      },
+      "recommendation": {
+        "recommendation_type": "blocked",
+        "summary": "Blocked until dependency is installed.",
+        "goal_status": "blocked",
+        "confidence": 0.6,
+        "blocked": {
+          "reason_code": "missing_dependency",
+          "reason": "Install the system dependency, then record an observation."
+        }
+      }
+    },
+    {
+      "match": {
+        "goal_status": "pending",
+        "open_recommendation_id": {"$null": true},
+        "description_contains": "type:unsafe"
+      },
+      "recommendation": {
+        "recommendation_type": "unsafe",
+        "summary": "No policy-safe next step.",
+        "goal_status": "blocked",
+        "confidence": 0.5,
+        "unsafe": {
+          "reason_code": "policy_violation",
+          "reason": "Every known next step exceeds the configured policy envelope."
+        }
+      }
+    },
+    {
+      "match": {
+        "goal_status": "pending",
+        "open_recommendation_id": {"$null": true},
+        "description_contains": "type:done"
+      },
+      "recommendation": {
+        "recommendation_type": "done",
+        "summary": "Goal already satisfied.",
+        "goal_status": "running",
+        "confidence": 0.95,
+        "done": {"reason": "Fixture goal marked complete for the six-types tour."}
+      }
+    },
+    {
+      "match": {
+        "goal_status": "pending",
+        "open_recommendation_id": {"$null": true},
+        "description_contains": "type:action"
+      },
+      "recommendation": {
+        "recommendation_type": "action",
+        "summary": "Run a no-op command.",
+        "goal_status": "running",
+        "confidence": 0.9,
+        "action": {
+          "kind": "shell",
+          "title": "No-op",
+          "shell": {
+            "argv": ["true"],
+            "command_for_display": "true",
+            "cwd": "{workspace_uri}",
+            "env": {"mode": "minimal", "set": {}},
+            "stdin": {"mode": "none"},
+            "pty": false,
+            "timeout_seconds": 60,
+            "expected_exit_codes": [0],
+            "requires_shell": false
+          },
+          "preconditions": [],
+          "success_criteria": []
+        },
+        "idempotency": {
+          "level": "strong",
+          "key": "idem_{goal_id}_true",
+          "scope": "workspace",
+          "safe_to_retry": true,
+          "safe_to_run_if_already_done": true,
+          "detects_noop": false,
+          "dedupe_strategy": "idempotency_key",
+          "partial_failure_recovery": "retry",
+          "max_attempts": 1
+        },
+        "risk": {
+          "level": "low",
+          "classes": ["execute_local"],
+          "blast_radius": "workspace",
+          "requires_approval": false,
+          "destructive": false,
+          "network": "not_required",
+          "secrets": "not_required",
+          "rollback": {"available": false, "kind": "unknown", "instructions": null}
+        }
+      }
+    }
+  ]
+}

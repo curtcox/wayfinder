@@ -39,6 +39,7 @@ else
 fi
 
 CONFIG_DIR="${HOME}/.config/wayfinder"
+SECRETS_FILE="${CONFIG_DIR}/secrets.toml"
 mkdir -p "$CONFIG_DIR"
 if [[ ! -f "${CONFIG_DIR}/config.toml" ]]; then
   cat >"${CONFIG_DIR}/config.toml" <<'EOF'
@@ -51,6 +52,20 @@ if [[ ! -f "${CONFIG_DIR}/config.toml" ]]; then
 # model = "openai/gpt-4.1-mini"
 EOF
   chmod 600 "${CONFIG_DIR}/config.toml"
+fi
+
+if [[ ! -f "${SECRETS_FILE}" ]]; then
+  cat >"${SECRETS_FILE}" <<'EOF'
+# Local secret values for secret_ref resolution (mode 0600).
+# Example:
+# github_token = "ghp_..."
+EOF
+  chmod 600 "${SECRETS_FILE}"
+fi
+
+if [[ "$MODE" == "full" ]]; then
+  echo "Optional system tools (install manually if doctor reports them missing):"
+  echo "  jq make task ansible-playbook gh temporal ffmpeg curl"
 fi
 
 echo

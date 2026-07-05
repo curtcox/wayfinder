@@ -3,10 +3,11 @@
 ## Current Status
 
 The repository currently contains the Phase 2 protocol core library under
-`src/wayfinder/core/` and its pytest suite. The `wayfinder` CLI entry point is
-still a Phase 3 stub that exits with "not yet implemented"; examples in
-`wayfinder-cli-user-guide.md` describe the intended interface rather than a fully
-runnable CLI.
+`src/wayfinder/core/` and its pytest suite, a runnable CLI and executor (Phases
+3–4), LLM/prose front-ends (Phases 5–6), optional §9 machines (Phase 7),
+deference integration (Phase 8), and Phase 9 setup/doctor/examples harness.
+Remaining Phase 9 work: additional guide examples (§6–§7, §9, §11–§12), richer
+setup credential prompts, and published conformance/examples reports on Pages.
 
 **Objective:** implement every tool needed to run the examples in
 [wayfinder-cli-user-guide.md](wayfinder-cli-user-guide.md), conforming to

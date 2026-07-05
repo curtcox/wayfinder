@@ -98,6 +98,7 @@ def run_doctor() -> dict[str, Any]:
             status="ready",
             detail=__version__,
         ),
+        _binary_status("jq"),
         _binary_status("make"),
         _binary_status("task"),
         _binary_status("ansible-playbook"),

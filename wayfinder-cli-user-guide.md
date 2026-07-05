@@ -14,9 +14,14 @@ when this guide and the spec disagree, the spec wins.
 **Tool names used here.** The spec defines the `wayfinder` command. The names
 `wayfinder-exec` (the dumb executor), `wayfinder-wrap` (the universal CLI-tool
 wrapper), and the LLM-backed prose front-ends `wayfinder-do`, `wayfinder-tell`,
-`wayfinder-ask`, and `wayfinder-chat` (§8) are illustrative placeholders —
-substitute whatever your installation provides. Security, key management, and permission policy are covered in a
-separate document; this guide only flags the places where they matter.
+`wayfinder-ask`, and `wayfinder-chat` (§8) are the console scripts shipped by
+[this repository's Python package](README.md). Security, key management, and
+permission policy are covered in
+[wayfinder-security.md](wayfinder-security.md); this guide only flags the places
+where they matter.
+
+Runnable copies of major sections live under `examples/` (for example
+`examples/02-quickstart/run.sh --scripted`).
 
 ---
 
@@ -123,7 +128,8 @@ Notes:
 - `actor` is who you are. `authority` matters later: cancelling a goal or
   marking it done/failed requires an *authenticated* `owner` or
   `policy_admin`. (How authentication is established is local policy — see the
-  security document.)
+  (How authentication is established is local policy — see
+  [wayfinder-security.md](wayfinder-security.md).)
 
 Capture the goal ID:
 
@@ -822,14 +828,15 @@ options, in increasing order of standing permission:
    policy.
 3. **Loosen local executor policy** for specific risk classes/tools — a
    standing decision that belongs in your policy configuration, covered in the
-   security document, not here.
+   [wayfinder-security.md](wayfinder-security.md), not here.
 
 The same pattern covers mutating remote calls (`gh release create`,
 `aws s3 rm`, `kubectl apply`): they arrive marked `network_write` /
 `external_side_effect` / possibly `irreversible`, and nothing runs until a
 human explicitly says so. Actions needing credentials reference them as
 `secret_ref` entries resolved through your local secret store — secret values
-never appear in commands, logs, or events. (Key management: security document.)
+never appear in commands, logs, or events. (Key management:
+[wayfinder-security.md](wayfinder-security.md).)
 
 ---
 
@@ -1521,7 +1528,7 @@ General habits that keep you out of trouble:
 ## 13. Security notes (the short version)
 
 Full treatment — authentication, key management, secret stores, policy
-configuration — lives in the separate security document. The five things every
+configuration — lives in [wayfinder-security.md](wayfinder-security.md). The five things every
 CLI user must internalize:
 
 1. **Review `argv`, not prose.** `summary`, `title`, and

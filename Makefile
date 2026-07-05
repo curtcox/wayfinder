@@ -1,4 +1,4 @@
-.PHONY: install lint format typecheck security complexity docs-lint docs-build docs-serve fast single cli-smoke test coverage check clean
+.PHONY: install lint format typecheck security complexity docs-lint docs-build docs-serve fast single cli-smoke test coverage check clean examples-scripted
 
 PYTHON ?= python3
 UV ?= uv
@@ -41,7 +41,7 @@ complexity:
 docs-lint:
 	npx --yes markdownlint-cli2 "**/*.md" "#site" "#.venv"
 	lychee --offline --no-progress --exclude-path site --exclude mailto: \
-		README.md PLAN.md wayfinder-cli-user-guide.md wayfinder-interaction-protocol-v0.1.md docs/
+		README.md PLAN.md wayfinder-cli-user-guide.md wayfinder-interaction-protocol-v0.1.md wayfinder-security.md docs/
 
 docs-build:
 	$(RUN) mkdocs build
@@ -65,10 +65,16 @@ coverage:
 	$(RUN) pytest -n auto --cov=wayfinder --cov-report=term-missing --cov-report=xml --cov-report=html \
 		--cov-fail-under=79
 
+examples-scripted:
+	@set -e; for script in examples/*/run.sh; do \
+		echo "==> $$script --scripted"; \
+		bash "$$script" --scripted; \
+	done
+
 check: lint typecheck security complexity docs-lint test coverage docs-build
 
 # Remove generated docs copies, site output, coverage, and local tool caches.
 clean:
 	rm -rf site .pytest_cache .mypy_cache .ruff_cache htmlcov .coverage coverage.xml
-	rm -rf docs/index.md docs/wayfinder-cli-user-guide.md docs/wayfinder-interaction-protocol-v0.1.md
+	rm -rf docs/index.md docs/wayfinder-cli-user-guide.md docs/wayfinder-interaction-protocol-v0.1.md docs/wayfinder-security.md
 	find . -type d -name __pycache__ -prune -exec rm -rf {} +

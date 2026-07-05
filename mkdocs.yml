@@ -49,4 +49,5 @@ nav:
   - Home: index.md
   - User Guide: wayfinder-cli-user-guide.md
   - Protocol Spec: wayfinder-interaction-protocol-v0.1.md
+  - Security: wayfinder-security.md
   - Reports: reports/index.md

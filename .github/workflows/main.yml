@@ -51,6 +51,9 @@ jobs:
             --cov-report=json:reports-out/coverage/coverage.json \
             --cov-fail-under=80
 
+      - name: Run scripted examples
+        run: make examples-scripted
+
       - name: Build documentation site
         run: uv run mkdocs build
 
