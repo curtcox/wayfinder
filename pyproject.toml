@@ -45,6 +45,7 @@ docs = [
 ]
 machines = [
     "py_trees>=2.2,<3",
+    "pyperplan>=2.1",
 ]
 [project.scripts]
 wayfinder = "wayfinder.cli.main:main"
@@ -57,6 +58,7 @@ wayfinder-chat = "wayfinder.chat.main:main"
 wayfinder-make = "wayfinder.make.main:main"
 wayfinder-tw = "wayfinder.tw.main:main"
 wayfinder-bt = "wayfinder.bt.main:main"
+wayfinder-plan = "wayfinder.plan.main:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -119,6 +121,10 @@ ignore = [
 "src/wayfinder/tw/**" = ["D103", "D102", "D107", "BLE001", "TRY301"]
 "src/wayfinder/brains/bt.py" = ["D102", "D103", "S603", "PLR0913", "C901", "PLR0912", "ANN401", "N802", "PLC0415", "PLR0915", "E501", "TC006"]
 "src/wayfinder/bt/**" = ["D103", "D102", "D107", "BLE001", "TRY301", "S105"]
+"src/wayfinder/brains/plan.py" = ["D102", "D103", "S603", "PLR0913", "C901", "PLR0912", "ANN401", "PLC0415", "SLF001", "TC001", "RET504"]
+"src/wayfinder/plan/**" = ["D103", "D102", "D107", "BLE001", "TRY301", "S105"]
+"tests/brains/test_plan.py" = ["D103", "PLR2004", "S101", "INP001"]
+"tests/test_plan_cli.py" = ["S603", "INP001", "D103", "S101"]
 "tests/brains/test_make.py" = ["D103", "PLR2004", "S101", "INP001"]
 "tests/brains/test_bt.py" = ["D103", "PLR2004", "S101", "INP001"]
 "tests/test_bt_cli.py" = ["S603", "INP001", "D103", "S101"]
@@ -155,7 +161,15 @@ module = "py_trees.*"
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
+module = "pyperplan.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
 module = "wayfinder.brains.bt"
+disable_error_code = ["misc"]
+
+[[tool.mypy.overrides]]
+module = "wayfinder.brains.plan"
 disable_error_code = ["misc"]
 
 [tool.pytest.ini_options]
