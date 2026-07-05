@@ -12,6 +12,7 @@ from typing import Any
 from wayfinder.brains.base import Brain
 from wayfinder.brains.llm import LLMBrain
 from wayfinder.brains.scripted import ScriptedBrain
+from wayfinder.cli.doctor import run_doctor
 from wayfinder.cli.jsonrpc import run_jsonrpc_server
 from wayfinder.cli.responses import map_exception, success_response, write_json
 from wayfinder.cli.service import WayfinderService
@@ -92,6 +93,10 @@ def _build_parser(*, prog: str = "wayfinder") -> argparse.ArgumentParser:
     verify.add_argument("--format", default="json", choices=["json"])
     verify.add_argument("--request-id")
 
+    doctor = subparsers.add_parser("doctor", help="Check dependencies and credentials")
+    doctor.add_argument("--format", default="json", choices=["json"])
+    doctor.add_argument("--request-id")
+
     return parser
 
 
@@ -147,6 +152,8 @@ def _dispatch(service: WayfinderService, args: argparse.Namespace) -> dict[str, 
         return service.explain(args.goal_id, args.recommendation_id, store=store)
     if args.command == "verify":
         return service.verify(args.goal_id, store=store)
+    if args.command == "doctor":
+        return run_doctor()
     msg = f"unsupported command: {args.command}"
     raise InvalidInputError(msg)
 
