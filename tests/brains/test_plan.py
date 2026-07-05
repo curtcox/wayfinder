@@ -13,14 +13,15 @@ _DOMAIN = Path(__file__).resolve().parents[2] / "examples" / "domains" / "cluste
 
 _PROBLEM = """(define (problem upgrade-node3)
   (:domain cluster-maintenance)
-  (:objects n3 n4 - node)
-  (:init (serving n3) (serving n4))
-  (:goal (upgraded n3))
+  (:objects n3 n4 n5 - node)
+  (:init (serving n3) (serving n4) (serving n5))
+  (:goal (and (upgraded n3) (serving n3)))
 )"""
 
 _BINDINGS = {
     "drain n3": {"argv": ["echo", "drain", "n3"], "title": "Drain node3"},
     "upgrade n3": {"argv": ["echo", "upgrade", "n3"], "title": "Upgrade node3 kernel 6.9"},
+    "bring-online n3": {"argv": ["echo", "online", "n3"], "title": "Bring node3 online"},
 }
 
 
@@ -103,6 +104,10 @@ def test_plan_brain_done_when_plan_complete(tmp_path: Path) -> None:
             "type": "action.completed",
             "data": {"action_result": {"idempotency_key": "idem_plan_0_1"}},
         },
+        {
+            "type": "action.completed",
+            "data": {"action_result": {"idempotency_key": "idem_plan_0_2"}},
+        },
     ]
     recommendation = brain.recommend(
         goal=_goal(workspace),
@@ -134,6 +139,43 @@ def test_parse_init_facts_extracts_predicates() -> None:
     facts = _parse_init_facts(_PROBLEM)
     assert "(serving n3)" in facts
     assert "(serving n4)" in facts
+
+
+def test_plan_brain_replans_after_observation_init_override(tmp_path: Path) -> None:
+    pytest.importorskip("pyperplan")
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    brain = PlanBrain(_DOMAIN)
+    events = [
+        {
+            "type": "action.completed",
+            "data": {"action_result": {"idempotency_key": "idem_plan_0_0"}},
+        },
+        {
+            "type": "observation.recorded",
+            "data": {
+                "observation": {
+                    "metadata": {
+                        "pddl_init": ["(serving n4)", "(serving n5)", "(drained n3)"],
+                    },
+                },
+            },
+        },
+    ]
+    recommendation = brain.recommend(
+        goal=_goal(workspace),
+        status={"goal_status": "running"},
+        events=events,
+        mode="issue",
+        explain_mode="structured",
+    )
+    assert recommendation["recommendation_type"] == "action"
+    action = recommendation["action"]
+    assert isinstance(action, dict)
+    assert action["title"] == "Upgrade node3 kernel 6.9"
+    explanation = recommendation["explanation"]
+    assert isinstance(explanation, dict)
+    assert explanation.get("summary", "").startswith("Planner step 1/")
 
 
 def test_plan_brain_requires_problem_without_llm(tmp_path: Path) -> None:

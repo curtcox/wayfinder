@@ -15,9 +15,9 @@ _DOMAIN = Path(__file__).resolve().parents[1] / "examples" / "domains" / "cluste
 
 _PROBLEM = """(define (problem upgrade-node3)
   (:domain cluster-maintenance)
-  (:objects n3 n4 - node)
-  (:init (serving n3) (serving n4))
-  (:goal (upgraded n3))
+  (:objects n3 n4 n5 - node)
+  (:init (serving n3) (serving n4) (serving n5))
+  (:goal (and (upgraded n3) (serving n3)))
 )"""
 
 
@@ -43,6 +43,7 @@ def test_plan_cli_preview_first_step(tmp_path: Path) -> None:
         "plan_actions": {
             "drain n3": {"argv": ["echo", "drain", "n3"], "title": "Drain node3"},
             "upgrade n3": {"argv": ["echo", "upgrade", "n3"], "title": "Upgrade node3"},
+            "bring-online n3": {"argv": ["echo", "online", "n3"], "title": "Bring node3 online"},
         },
     }
     created = json.loads(

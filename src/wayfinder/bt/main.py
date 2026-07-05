@@ -22,14 +22,14 @@ def _split_args(argv: list[str]) -> tuple[list[str], list[str]]:
     index = 0
     while index < len(argv):
         token = argv[index]
-        if token == "--tree":
+        if token == "--tree":  # nosec B105
             if index + 1 >= len(argv):
                 msg = "--tree requires a path argument"
                 raise InvalidInputError(msg)
             bt_args.extend([token, argv[index + 1]])
             index += 2
             continue
-        if token == "--help":
+        if token == "--help":  # nosec B105
             bt_args.append(token)
             index += 1
             continue

@@ -21,7 +21,7 @@ def _split_args(argv: list[str]) -> tuple[list[str], list[str]]:
     index = 0
     while index < len(argv):
         token = argv[index]
-        if token == "--domain":
+        if token == "--domain":  # nosec B105
             if index + 1 >= len(argv):
                 msg = "--domain requires a path argument"
                 raise InvalidInputError(msg)
