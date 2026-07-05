@@ -14,8 +14,12 @@ import pytest
 from tests.conformance.helpers import (
     create_goal_via_cli,
     event_types_from_history,
+    issue_recommendation,
+    owner_actor,
     run_cli,
     run_exec,
+    run_update_via_cli,
+    service_for_store,
     shell_action_recommendation,
     write_exec_playbook,
     write_playbook,
@@ -280,3 +284,191 @@ def test_exec_sigkill_mid_action_resumes_without_reexecution(tmp_path: Path) -> 
     event_types = event_types_from_history(store, goal_id)
     assert "action.blocked" in event_types
     assert event_types.count("action.started") == 1
+
+
+def test_15_8_human_override_replacement(tmp_path: Path) -> None:
+    """§15.8: executor validates and runs a human override replacement."""
+    workspace = tmp_path / "project"
+    workspace.mkdir()
+    store = tmp_path / "store"
+    service = service_for_store(store)
+    created = service.goal_create(
+        {
+            "schema": "wip.goal_create/0.1",
+            "protocol_version": "0.1",
+            "create_id": "create_override_01",
+            "created_at": "2026-07-04T18:00:00Z",
+            "actor": owner_actor(),
+            "description": "Run tests.",
+            "workspace_uri": f"file:{workspace}",
+            "policy": {"max_auto_risk_level": "low"},
+        },
+    )
+    goal_id = str(created["goal"]["goal_id"])
+    ctx = issue_recommendation(service, goal_id)
+    replacement = {
+        "schema": "wip.recommendation/0.1",
+        "protocol_version": "0.1",
+        "goal_id": goal_id,
+        "recommendation_id": "rec_pnpm_test",
+        "recommendation_type": "action",
+        "summary": "Run pnpm test instead.",
+        "goal_status": "running",
+        "confidence": 0.9,
+        "executable": True,
+        "issued_at": "2026-07-04T18:05:00Z",
+        "expires_at": "2099-07-04T20:00:00Z",
+        "parallel": False,
+        "supersedes": [ctx["recommendation_id"]],
+        "wayfinder": {"name": "human", "version": "0.1", "instance_id": "override"},
+        "basis": {
+            "event_log_seq": ctx["issued_event_seq"],
+            "event_log_head": ctx["issued_event_hash"],
+            "state_version": "override",
+        },
+        "lease": {
+            "lease_id": "lease_pnpm",
+            "lease_expires_at": "2099-07-04T20:00:00Z",
+        },
+        "action": {
+            "action_id": "act_pnpm_test",
+            "kind": "shell",
+            "title": "Run pnpm test",
+            "shell": {
+                "argv": ["true"],
+                "command_for_display": "pnpm test",
+                "cwd": f"file:{workspace}",
+                "env": {"mode": "minimal", "set": {}},
+                "stdin": {"mode": "none"},
+                "pty": False,
+                "timeout_seconds": 60,
+                "expected_exit_codes": [0],
+                "requires_shell": False,
+            },
+            "preconditions": [],
+            "success_criteria": [],
+        },
+        "idempotency": {
+            "level": "strong",
+            "key": "idem_pnpm_test",
+            "scope": "workspace",
+            "safe_to_retry": True,
+            "safe_to_run_if_already_done": True,
+            "detects_noop": False,
+            "dedupe_strategy": "idempotency_key",
+            "partial_failure_recovery": "retry",
+            "max_attempts": 1,
+        },
+        "risk": {
+            "level": "low",
+            "classes": ["execute_local"],
+            "blast_radius": "workspace",
+            "requires_approval": False,
+            "destructive": False,
+            "network": "not_required",
+            "secrets": "not_required",
+            "rollback": {"available": False, "kind": "unknown", "instructions": None},
+        },
+        "run_id": None,
+    }
+    override = run_update_via_cli(
+        store,
+        goal_id,
+        {
+            "schema": "wip.update/0.1",
+            "protocol_version": "0.1",
+            "update_id": "upd_override_replace",
+            "goal_id": goal_id,
+            "recommendation_id": ctx["recommendation_id"],
+            "created_at": "2026-07-04T18:05:00Z",
+            "actor": owner_actor(),
+            "update_type": "override",
+            "override": {
+                "decision": "replace",
+                "reason": "prefer pnpm",
+                "replacement_recommendation": replacement,
+            },
+        },
+    )
+    assert override.returncode == 0, override.stdout + override.stderr
+
+    playbook = tmp_path / "done_after_replace.json"
+    write_exec_playbook(
+        playbook,
+        shell_action_recommendation(argv=["false"], workspace=workspace),
+    )
+    proc = run_exec(["run", "--goal-id", goal_id], store=store, playbook=playbook)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+
+    events = [
+        json.loads(line)
+        for line in run_cli(
+            ["--store", str(store), "history", "--goal-id", goal_id, "--since-seq", "0"],
+        ).stdout.splitlines()
+        if line.strip()
+    ]
+    event_types = [event["type"] for event in events]
+    assert "recommendation.issued" in event_types
+    assert "recommendation.overridden" in event_types
+    assert "action.started" in event_types
+    assert "action.completed" in event_types
+
+    started = next(event for event in events if event["type"] == "action.started")
+    assert started["data"]["recommendation_id"] == "rec_pnpm_test"
+    assert started["data"]["action_id"] == "act_pnpm_test"
+
+
+def test_15_11_partial_artifact_write(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """§15.11: failed artifact verification does not produce invalid references."""
+    from wayfinder.core.artifacts import ArtifactStore
+    from wayfinder.core.errors import ArtifactIntegrityError
+    from wayfinder.exec.loop import ExecutorConfig, ExecutorLoop
+
+    workspace = tmp_path / "project"
+    workspace.mkdir()
+    store = tmp_path / "store"
+    playbook = tmp_path / "large_output.json"
+    write_exec_playbook(
+        playbook,
+        shell_action_recommendation(
+            argv=[sys.executable, "-c", "print('x' * 12000)"],
+            workspace=workspace,
+        ),
+    )
+    created = create_goal_via_cli(store, workspace, playbook=playbook)
+    goal_id = created["goal"]["goal_id"]
+
+    def _fail_verify(_self: ArtifactStore, _artifact: dict[str, object]) -> None:
+        msg = "simulated partial artifact write"
+        raise ArtifactIntegrityError(msg)
+
+    monkeypatch.setattr(ArtifactStore, "verify_reference", _fail_verify)
+
+    loop = ExecutorLoop(
+        ExecutorConfig(
+            goal_id=goal_id,
+            store=str(store),
+            executor_id="exec_test",
+            wayfinder_command=None,
+            brain_playbook=str(playbook),
+            policy_path=None,
+            dry_run=False,
+        ),
+    )
+    outcome = loop.run()
+    assert outcome.stopped_reason == "goal_completed"
+
+    events = [
+        json.loads(line)
+        for line in run_cli(
+            ["--store", str(store), "history", "--goal-id", goal_id, "--since-seq", "0"],
+        ).stdout.splitlines()
+        if line.strip()
+    ]
+    completed = next(event for event in events if event["type"] == "action.completed")
+    action_result = completed["data"]["action_result"]
+    artifacts = action_result.get("artifacts", [])
+    assert artifacts == []
+    assert "stdout_artifact" not in action_result.get("output", {})
+    assert "stderr_artifact" not in action_result.get("output", {})
+

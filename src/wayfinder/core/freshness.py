@@ -32,17 +32,29 @@ def _find_issue_event(
     recommendation_id: str,
 ) -> dict[str, Any] | None:
     for event in events:
-        if event.get("type") != "recommendation.issued":
-            continue
-        data = event.get("data", {})
-        if not isinstance(data, dict):
-            continue
-        recommendation = data.get("recommendation", {})
-        if (
-            isinstance(recommendation, dict)
-            and recommendation.get("recommendation_id") == recommendation_id
-        ):
-            return event
+        if event.get("type") == "recommendation.issued":
+            data = event.get("data", {})
+            if not isinstance(data, dict):
+                continue
+            recommendation = data.get("recommendation", {})
+            if (
+                isinstance(recommendation, dict)
+                and recommendation.get("recommendation_id") == recommendation_id
+            ):
+                return event
+        if event.get("type") == "recommendation.overridden":
+            data = event.get("data", {})
+            if not isinstance(data, dict):
+                continue
+            override = data.get("override", {})
+            replacement = data.get("replacement_recommendation", {})
+            if (
+                isinstance(override, dict)
+                and override.get("decision") == "replace"
+                and isinstance(replacement, dict)
+                and replacement.get("recommendation_id") == recommendation_id
+            ):
+                return event
     return None
 
 

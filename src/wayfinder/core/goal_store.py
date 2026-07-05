@@ -14,6 +14,7 @@ from wayfinder.core.event_log import EventLog
 from wayfinder.core.idempotency import IdempotencyStore
 from wayfinder.core.lock import AppendLock
 from wayfinder.core.reducer import reduce_events
+from wayfinder.core.snapshot import load_latest_valid_snapshot, reduce_from_snapshot, write_snapshot
 from wayfinder.core.updates import find_recommendation_by_issue, map_update_to_events
 
 
@@ -41,9 +42,19 @@ class GoalStore:
         return self.event_log.read_all()
 
     def status(self, *, observed_at: str | None = None) -> dict[str, Any]:
-        state = reduce_events(self.read_events())
+        events = self.read_events()
+        snapshot = load_latest_valid_snapshot(self.store_root, self.goal_id, events)
+        if snapshot is not None:
+            state = reduce_from_snapshot(snapshot, events)
+        else:
+            state = reduce_events(events)
         timestamp = observed_at or datetime.now(tz=UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
         return state.to_status(observed_at=timestamp)
+
+    def write_snapshot(self, *, seq: int | None = None) -> dict[str, Any]:
+        """Persist a validated snapshot for the current event log."""
+        events = self.read_events()
+        return write_snapshot(self.store_root, self.goal_id, events, seq=seq)
 
     def append_events(
         self,

@@ -444,12 +444,21 @@ def find_recommendation_by_issue(
         if event.get("event_hash") != issued_event_hash:
             msg = "issued_event_hash mismatch"
             raise StaleRecommendationError(msg)
-        if event.get("type") != "recommendation.issued":
-            msg = "issued_event_seq does not reference recommendation.issued"
-            raise InvalidInputError(msg)
-        data = event.get("data", {})
-        if isinstance(data, dict):
-            recommendation = data.get("recommendation")
-            if isinstance(recommendation, dict):
-                return recommendation
+        if event.get("type") == "recommendation.issued":
+            data = event.get("data", {})
+            if isinstance(data, dict):
+                recommendation = data.get("recommendation")
+                if isinstance(recommendation, dict):
+                    return recommendation
+        if event.get("type") == "recommendation.overridden":
+            data = event.get("data", {})
+            if isinstance(data, dict):
+                override = data.get("override", {})
+                replacement = data.get("replacement_recommendation")
+                if (
+                    isinstance(override, dict)
+                    and override.get("decision") == "replace"
+                    and isinstance(replacement, dict)
+                ):
+                    return replacement
     return None

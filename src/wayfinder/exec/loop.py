@@ -11,6 +11,7 @@ from typing import Any
 
 from wayfinder.cli.store_paths import resolve_store_root
 from wayfinder.core.artifacts import ArtifactStore
+from wayfinder.core.errors import ArtifactIntegrityError
 from wayfinder.core.freshness import evaluate_executable
 from wayfinder.core.types import is_terminal_goal_status
 from wayfinder.exec.durability import DurabilityStore, PendingAction
@@ -114,19 +115,57 @@ class ExecutorLoop:
     def _issued_context(self, recommendation_id: str) -> tuple[int, str]:
         events = self.client.history(self.config.goal_id, since_seq=0)
         for event in reversed(events):
-            if event.get("type") != "recommendation.issued":
+            if event.get("type") == "recommendation.issued":
+                data = event.get("data", {})
+                if not isinstance(data, dict):
+                    continue
+                recommendation = data.get("recommendation", {})
+                if (
+                    isinstance(recommendation, dict)
+                    and recommendation.get("recommendation_id") == recommendation_id
+                ):
+                    return int(event["seq"]), str(event["event_hash"])
+            if event.get("type") == "recommendation.overridden":
+                data = event.get("data", {})
+                if not isinstance(data, dict):
+                    continue
+                override = data.get("override", {})
+                replacement = data.get("replacement_recommendation", {})
+                if (
+                    isinstance(override, dict)
+                    and override.get("decision") == "replace"
+                    and isinstance(replacement, dict)
+                    and replacement.get("recommendation_id") == recommendation_id
+                ):
+                    return int(event["seq"]), str(event["event_hash"])
+        msg = f"issued event not found for recommendation {recommendation_id}"
+        raise WayfinderClientError(msg)
+
+    def _find_pending_replacement(self, events: list[dict[str, Any]]) -> dict[str, Any] | None:
+        for event in reversed(events):
+            if event.get("type") != "recommendation.overridden":
                 continue
             data = event.get("data", {})
             if not isinstance(data, dict):
                 continue
-            recommendation = data.get("recommendation", {})
-            if (
-                isinstance(recommendation, dict)
-                and recommendation.get("recommendation_id") == recommendation_id
-            ):
-                return int(event["seq"]), str(event["event_hash"])
-        msg = f"issued event not found for recommendation {recommendation_id}"
-        raise WayfinderClientError(msg)
+            override = data.get("override", {})
+            if not isinstance(override, dict) or override.get("decision") != "replace":
+                continue
+            replacement = data.get("replacement_recommendation")
+            if not isinstance(replacement, dict):
+                continue
+            rec_id = str(replacement.get("recommendation_id", ""))
+            if not rec_id:
+                continue
+            check = evaluate_executable(
+                events,
+                replacement,
+                actor_id=self.config.executor_id,
+            )
+            if check.has_terminal_action:
+                continue
+            return replacement
+        return None
 
     def _base_update(
         self,
@@ -209,6 +248,15 @@ class ExecutorLoop:
                     explain="structured",
                 )
                 return self._handle_dry_run(recommendation, status)
+
+            events = self.client.history(self.config.goal_id, since_seq=0)
+            replacement = self._find_pending_replacement(events)
+            if replacement is not None:
+                outcome = self._handle_recommendation(replacement, status)
+                if outcome is not None:
+                    return outcome
+                status = self.client.status(self.config.goal_id)
+                continue
 
             recommendation = self.client.next(
                 self.config.goal_id,

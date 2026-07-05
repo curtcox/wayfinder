@@ -15,6 +15,7 @@ from urllib.parse import unquote, urlparse
 
 from wayfinder.cli.store_paths import parse_workspace_uri
 from wayfinder.core.artifacts import ArtifactStore
+from wayfinder.core.errors import ArtifactIntegrityError
 
 REDACTION_PATTERNS = [
     re.compile(
@@ -152,6 +153,35 @@ def execute_shell_action(
     )
 
 
+def _write_verified_artifact(
+    artifact_store: ArtifactStore,
+    content: bytes,
+    *,
+    artifact_id: str,
+    media_type: str,
+    description: str,
+) -> dict[str, Any]:
+    """Write an artifact and verify digest; retry once on verification failure."""
+    ref = artifact_store.write_bytes(
+        content,
+        artifact_id=artifact_id,
+        media_type=media_type,
+        description=description,
+    )
+    try:
+        artifact_store.verify_reference(ref)
+        return ref
+    except ArtifactIntegrityError:
+        ref = artifact_store.write_bytes(
+            content,
+            artifact_id=artifact_id,
+            media_type=media_type,
+            description=description,
+        )
+        artifact_store.verify_reference(ref)
+        return ref
+
+
 def build_action_result(
     command_result: CommandResult,
     *,
@@ -176,30 +206,45 @@ def build_action_result(
     stderr_text = redact_text(command_result.stderr.decode("utf-8", errors="replace"))
     output: dict[str, Any] = {}
     artifacts: list[dict[str, Any]] = []
+    storage_errors: list[str] = []
 
     if len(stdout_text.encode("utf-8")) <= inline_limit:
         output["stdout"] = stdout_text
     elif artifact_store is not None:
-        ref = artifact_store.write_bytes(
-            stdout_text.encode("utf-8"),
-            artifact_id="art_stdout",
-            media_type="text/plain",
-            description="stdout",
-        )
-        artifacts.append(ref)
-        output["stdout_artifact"] = ref["artifact_id"]
+        try:
+            ref = _write_verified_artifact(
+                artifact_store,
+                stdout_text.encode("utf-8"),
+                artifact_id="art_stdout",
+                media_type="text/plain",
+                description="stdout",
+            )
+            artifacts.append(ref)
+            output["stdout_artifact"] = ref["artifact_id"]
+        except ArtifactIntegrityError:
+            output["stdout"] = stdout_text[:inline_limit]
+            storage_errors.append("artifact storage failed for stdout spillover")
 
     if len(stderr_text.encode("utf-8")) <= inline_limit:
         output["stderr"] = stderr_text
     elif artifact_store is not None:
-        ref = artifact_store.write_bytes(
-            stderr_text.encode("utf-8"),
-            artifact_id="art_stderr",
-            media_type="text/plain",
-            description="stderr",
-        )
-        artifacts.append(ref)
-        output["stderr_artifact"] = ref["artifact_id"]
+        try:
+            ref = _write_verified_artifact(
+                artifact_store,
+                stderr_text.encode("utf-8"),
+                artifact_id="art_stderr",
+                media_type="text/plain",
+                description="stderr",
+            )
+            artifacts.append(ref)
+            output["stderr_artifact"] = ref["artifact_id"]
+        except ArtifactIntegrityError:
+            output["stderr"] = stderr_text[:inline_limit]
+            storage_errors.append("artifact storage failed for stderr spillover")
+
+    if storage_errors:
+        note = "; ".join(storage_errors)
+        output["stderr"] = f"{output.get('stderr', '')}\n{note}".strip()
 
     result: dict[str, Any] = {
         "status": status,
