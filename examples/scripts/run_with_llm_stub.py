@@ -51,7 +51,10 @@ def main() -> int:
         print("responses file must be a non-empty JSON array", file=sys.stderr)
         return 2
 
-    _StubHandler.queue = [str(item) for item in responses]
+    _StubHandler.queue = [
+        item if isinstance(item, str) else json.dumps(item, ensure_ascii=False)
+        for item in responses
+    ]
     server = ThreadingHTTPServer(("127.0.0.1", 0), _StubHandler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()

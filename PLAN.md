@@ -23,6 +23,12 @@ fixed `make docs-lint` by migrating markdownlint config to
 fixing lychee CI installs for the v0.24.1 tarball layout, and brought
 `make check` green locally.
 
+Definition-of-done closure: expanded the examples harness with
+`examples/appendix-pocket/` (guide appendix pocket session), full §8 prose
+coverage in `examples/08-prose/` (`wayfinder-do`, `wayfinder-ask`, and
+`wayfinder-chat` alongside `wayfinder-tell`), and offline §9 previews for
+Taskwarrior, Codex, and pty exec in `examples/09-machines/`.
+
 **Objective:** implement every tool needed to run the examples in
 [wayfinder-cli-user-guide.md](wayfinder-cli-user-guide.md), conforming to
 [wayfinder-interaction-protocol-v0.1.md](wayfinder-interaction-protocol-v0.1.md) (WIP v0.1).

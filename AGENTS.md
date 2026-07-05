@@ -10,7 +10,8 @@ Current implementation status: the protocol core library exists under
 `src/wayfinder/core/`, with a runnable `wayfinder` CLI, `wayfinder-exec`,
 LLM/prose front-ends, optional §9 machines, setup/doctor, and the full
 `examples/` harness. Use `examples/*/run.sh --scripted` for CI; live-only
-service examples are `09-temporal`, `09-bridge-gh`, and `09-web`.
+service examples are `09-temporal`, `09-bridge-gh`, and `09-web`. The appendix
+pocket session lives in `examples/appendix-pocket/`.
 
 ## Important Paths
 

@@ -1,0 +1,84 @@
+{
+  "rules": [
+    {
+      "match": {
+        "goal_status": "pending",
+        "open_recommendation_id": {"$null": true}
+      },
+      "recommendation": {
+        "recommendation_type": "question",
+        "summary": "Need package manager choice.",
+        "goal_status": "waiting",
+        "confidence": 0.8,
+        "question": {
+          "question_id": "q_pocket",
+          "prompt": "Which package manager does this repository use: npm or pnpm?"
+        }
+      }
+    },
+    {
+      "match": {
+        "goal_status": "waiting",
+        "open_recommendation_id": {"$null": true},
+        "completed_steps": 0
+      },
+      "recommendation": {
+        "recommendation_type": "action",
+        "summary": "Run a no-op command.",
+        "goal_status": "running",
+        "confidence": 0.9,
+        "action": {
+          "kind": "shell",
+          "title": "No-op",
+          "shell": {
+            "argv": ["true"],
+            "command_for_display": "true",
+            "cwd": "{workspace_uri}",
+            "env": {"mode": "minimal", "set": {}},
+            "stdin": {"mode": "none"},
+            "pty": false,
+            "timeout_seconds": 60,
+            "expected_exit_codes": [0],
+            "requires_shell": false
+          },
+          "preconditions": [],
+          "success_criteria": []
+        },
+        "idempotency": {
+          "level": "strong",
+          "key": "idem_{goal_id}_pocket",
+          "scope": "workspace",
+          "safe_to_retry": true,
+          "safe_to_run_if_already_done": true,
+          "detects_noop": false,
+          "dedupe_strategy": "idempotency_key",
+          "partial_failure_recovery": "retry",
+          "max_attempts": 1
+        },
+        "risk": {
+          "level": "low",
+          "classes": ["execute_local"],
+          "blast_radius": "workspace",
+          "requires_approval": false,
+          "destructive": false,
+          "network": "not_required",
+          "secrets": "not_required",
+          "rollback": {"available": false, "kind": "unknown", "instructions": null}
+        }
+      }
+    },
+    {
+      "match": {
+        "completed_steps": {"$gte": 1},
+        "open_recommendation_id": {"$null": true}
+      },
+      "recommendation": {
+        "recommendation_type": "done",
+        "summary": "Pocket session complete.",
+        "goal_status": "running",
+        "confidence": 0.95,
+        "done": {"reason": "No-op succeeded after the question was answered."}
+      }
+    }
+  ]
+}
