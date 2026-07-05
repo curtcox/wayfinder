@@ -44,6 +44,7 @@ jobs:
 
       - name: Lint and analysis
         run: |
+          uv run python -c "from hooks.copy_canonical_docs import _copy_canonical_docs; _copy_canonical_docs()"
           mkdir -p reports-out/tools
           set +e
           uv run ruff check . > reports-out/tools/ruff.txt 2>&1
