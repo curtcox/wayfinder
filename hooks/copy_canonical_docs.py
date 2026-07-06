@@ -20,7 +20,7 @@ _CANONICAL = (
 )
 
 
-def _copy_canonical_docs() -> None:
+def copy_canonical_docs() -> None:
     DOCS.mkdir(exist_ok=True)
     for src_name, dest_name in _CANONICAL:
         shutil.copy2(ROOT / src_name, DOCS / dest_name)
@@ -28,4 +28,8 @@ def _copy_canonical_docs() -> None:
 
 def on_startup(**_kwargs: object) -> None:
     """MkDocs hook: sync canonical root markdown into docs/ before each build."""
-    _copy_canonical_docs()
+    copy_canonical_docs()
+
+
+if __name__ == "__main__":
+    copy_canonical_docs()
