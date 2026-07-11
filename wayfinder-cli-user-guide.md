@@ -15,7 +15,7 @@ when this guide and the spec disagree, the spec wins.
 `wayfinder-exec` (the dumb executor), `wayfinder-wrap` (the universal CLI-tool
 wrapper), and the LLM-backed prose front-ends `wayfinder-do`, `wayfinder-tell`,
 `wayfinder-ask`, and `wayfinder-chat` (§8) are the console scripts shipped by
-[this repository's Python package](README.md). Security, key management, and
+[this repository's Python package](https://github.com/curtcox/wayfinder). Security, key management, and
 permission policy are covered in
 [wayfinder-security.md](wayfinder-security.md); this guide only flags the places
 where they matter.

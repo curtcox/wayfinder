@@ -1,0 +1,9 @@
+---
+- hosts: local
+  gather_facts: false
+  tasks:
+    - name: Ensure managed marker file
+      ansible.builtin.copy:
+        content: "managed by ansible\n"
+        dest: "{{ playbook_dir }}/../managed.txt"
+        mode: "0644"

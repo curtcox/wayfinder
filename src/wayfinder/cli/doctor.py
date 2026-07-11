@@ -173,6 +173,17 @@ def run_doctor() -> dict[str, Any]:
                 detail="ffmpeg on PATH" if shutil.which("ffmpeg") else "install ffmpeg for §7.1",
             ),
             _example_status(
+                check_id="example.09-ansible",
+                section="examples",
+                name="§9.7 wrap (ansible)",
+                ready=shutil.which("ansible-playbook") is not None,
+                detail=(
+                    "ansible-playbook on PATH"
+                    if shutil.which("ansible-playbook")
+                    else "install ansible for §9.7 check-mode preview"
+                ),
+            ),
+            _example_status(
                 check_id="example.09-bridge-gh",
                 section="examples",
                 name="§9.4 bridge gh",

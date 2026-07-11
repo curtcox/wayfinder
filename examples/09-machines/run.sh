@@ -136,6 +136,28 @@ EOF
   echo "§9.9 wayfinder-codex: preview ok for ${goal_id}"
 }
 
+preview_ansible() {
+  if ! command -v ansible-playbook >/dev/null 2>&1; then
+    echo "skip §9.7 wayfinder-wrap ansible: ansible-playbook not on PATH"
+    return 0
+  fi
+  local ansible_root created goal_id preview
+  ansible_root="${ROOT}/examples/ansible"
+  mkdir -p "${WORKSPACE}/project/inventory" "${WORKSPACE}/project/playbooks"
+  cp "${ansible_root}/inventory/localhost.ini" "${WORKSPACE}/project/inventory/localhost.ini"
+  cp "${ansible_root}/playbooks/site.yml" "${WORKSPACE}/project/playbooks/site.yml"
+
+  created="$(goal_create "Converge localhost nginx config with ansible check mode first." "create_ansible_01")"
+  goal_id="$(printf '%s' "$created" | jq -r '.result.goal.goal_id')"
+  preview="$(wf --store "$STORE" --brain-playbook "${FIXTURES}/wrap_ansible_check_playbook.json" \
+    next --goal-id "$goal_id" --mode=preview)"
+  printf '%s' "$preview" | jq -e '.result.recommendation_type == "action"' >/dev/null
+  printf '%s' "$preview" | jq -e '(.result.risk.classes // []) | index("network_read")' >/dev/null
+  printf '%s' "$preview" | jq -e '.result.action.shell.argv[0] == "ansible-playbook"' >/dev/null
+  printf '%s' "$preview" | jq -e '.result.action.shell.argv | index("--check")' >/dev/null
+  echo "§9.7 wayfinder-wrap ansible: check-mode preview ok for ${goal_id}"
+}
+
 preview_pty() {
   if ! uv run python3 -c "import pexpect" >/dev/null 2>&1; then
     echo "skip §9.8 wayfinder-exec-pty: pexpect not installed"
@@ -211,6 +233,7 @@ preview_make
 preview_bt
 preview_plan
 preview_tw
+preview_ansible
 preview_codex
 preview_pty
 echo "§9 machines: offline previews complete"

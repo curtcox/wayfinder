@@ -26,8 +26,9 @@ fixing lychee CI installs for the v0.24.1 tarball layout, and brought
 Definition-of-done closure: expanded the examples harness with
 `examples/appendix-pocket/` (guide appendix pocket session), full §8 prose
 coverage in `examples/08-prose/` (`wayfinder-do`, `wayfinder-ask`, and
-`wayfinder-chat` alongside `wayfinder-tell`), and offline §9 previews for
-Taskwarrior, Codex, and pty exec in `examples/09-machines/`.
+`wayfinder-chat` alongside `wayfinder-tell`), §7.2 curl network-risk coverage
+in `examples/07-wrap/`, and offline §9 previews for Taskwarrior, Ansible
+check-mode, Codex, and pty exec in `examples/09-machines/`.
 
 **Objective:** implement every tool needed to run the examples in
 [wayfinder-cli-user-guide.md](wayfinder-cli-user-guide.md), conforming to
